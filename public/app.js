@@ -3,6 +3,8 @@ const FACE_MODEL_URL =
   "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
 const DETECTION_MAX_DIM = 640; // downscale for fast client-side detection; fractions stay resolution-independent
 const API_BASE = ""; // same-origin (server also serves this static site)
+const SHARE_POST_TEXT =
+  "Built my HH Goa 2026 frame and I’m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa";
 
 // ---- DOM refs ----------------------------------------------------------
 const photoInput = document.getElementById("photoInput");
@@ -58,6 +60,11 @@ function updateGenerateEnabled() {
     nameInput.value.trim() &&
     roleInput.value.trim()
   );
+}
+
+function buildShareIntentUrl(sharePageUrl) {
+  const params = new URLSearchParams({ text: SHARE_POST_TEXT, url: sharePageUrl });
+  return `https://twitter.com/intent/tweet?${params.toString()}`;
 }
 
 async function isHeicFile(file) {
@@ -252,7 +259,21 @@ generateBtn.addEventListener("click", async () => {
 shareBtn.addEventListener("click", async () => {
   if (!lastGeneratedResult) return;
   const { imageUrl, sharePageUrl, shareIntentUrl } = lastGeneratedResult;
-  const shareText = "I just built my Hacker House Goa 2026 card! #FrameInGoa";
+  const shareText = SHARE_POST_TEXT;
+  const fallbackIntentUrl =
+    shareIntentUrl ||
+    buildShareIntentUrl(
+      sharePageUrl || `${window.location.origin}${window.location.pathname}`,
+    );
+
+  // Open a placeholder tab synchronously so popup blockers don't block
+  // fallback navigation after async share checks.
+  let fallbackTab = null;
+  try {
+    fallbackTab = window.open("", "_blank");
+  } catch (err) {
+    fallbackTab = null;
+  }
 
   // Prefer native share sheet with the actual image attached (best on mobile)
   try {
@@ -268,6 +289,7 @@ shareBtn.addEventListener("click", async () => {
           text: shareText,
           url: sharePageUrl,
         });
+        if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
         return;
       }
     }
@@ -279,7 +301,11 @@ shareBtn.addEventListener("click", async () => {
 
   // Fallback: open a pre-filled X/Twitter intent with the share-page link
   // (its OG image is the real generated card, not a blank thumbnail)
-  window.open(shareIntentUrl, "_blank", "noopener");
+  if (fallbackTab && !fallbackTab.closed) {
+    fallbackTab.location.href = fallbackIntentUrl;
+    return;
+  }
+  window.location.href = fallbackIntentUrl;
 });
 
 // ---- Start over ---------------------------------------------------------------
