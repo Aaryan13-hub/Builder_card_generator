@@ -11,7 +11,7 @@ module.exports = {
 
   // Path to the fixed background art (transparent hole where the photo goes).
   // Currently a generated placeholder — replace with final design export.
-  TEMPLATE_PATH: path.join(__dirname, '..', 'templates', 'card_template.jpg'),
+  TEMPLATE_PATH: path.join(__dirname, '..', 'templates', 'card_template2.png'),
 
   // Circular photo window (center x/y, radius) — in card pixel coordinates.
   // Detected from the real design (templates/card_template.jpg) via
@@ -48,13 +48,17 @@ module.exports = {
     // cream card at y=928 and y=1019. Title+name live above the first
     // divider; role lives between the two dividers; below the second
     // divider is decorative padding only.
-    cardLeft: 240,
-    cardWidth: 708,
-    divider1Y: 928,
-    divider2Y: 1019,
-    title: { y: 855, font: 'italic bold 28px "RobotoItalic"', color: '#00ffd0ff' },     // builder tag — bundled RobotoItalic (works on Linux/Vercel)
-    name: { yStart: 985, font: 'bold 56px "Roboto"', color: '#F2C744', lineHeight: 90 },  // bundled Roboto Bold
-    role: { y: 1060, font: 'bold 50px "Roboto"', color: '#f4c12aff' },                   // bundled Roboto Bold
+    // Cream card zone in card_template2.png — spans from y≈756 to y≈1080,
+    // x from ~148 to ~940. Two baked-in divider lines sit at approx y=937 and y=1030.
+    cardLeft: 148,
+    cardWidth: 792,
+    divider1Y: 937,
+    divider2Y: 1030,
+    // Text colours match the reference design: dark forest-green on cream for
+    // title/name; deep golden-yellow for role.
+    title: { y: 820, font: 'italic bold 26px "RobotoItalic"', color: '#2B4A14' },
+    name:  { yStart: 905, font: 'bold 54px "Roboto"', color: '#1C3A0E', lineHeight: 62 },
+    role:  { y: 1010, font: 'bold 48px "Roboto"', color: '#C8960A' },
   },
 
   STORAGE_TTL_MS: 1000 * 60 * 60 * 24, // 24h — generated cards auto-expire

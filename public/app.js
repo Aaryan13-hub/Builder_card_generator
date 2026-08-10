@@ -180,9 +180,11 @@ photoInput.addEventListener("change", async () => {
           width: box.width / w,
           height: box.height / h,
         };
-        drawFaceOverlay(previewCanvas, box);
+        // Note: we intentionally do NOT draw the bounding box on the preview —
+        // face detection still works and the faceBox is sent to the server for
+        // accurate center-cropping, but the yellow square is hidden from the user.
         detectionStatus.textContent =
-          "Face detected — this area will be centered in your card.";
+          "Face detected — your photo will be perfectly centered.";
       } else {
         faceBoxFraction = null;
         detectionStatus.textContent =
