@@ -13,11 +13,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/templates', express.static(path.join(__dirname, '..', 'templates')));
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB, generous for phone camera JPG/HEIC
 });
+const SHARE_POST_TEXT =
+  'Built my HH Goa 2026 frame and I’m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa';
 
 // Base URL used to build absolute links for OG tags / share intents.
 // Override with PUBLIC_BASE_URL env var when deployed.
@@ -164,8 +167,7 @@ app.get('/card/:id', (req, res) => {
 });
 
 function buildTweetIntent(pageUrl) {
-  const text = `I just built my Hacker House Goa 2026 card! #FrameInGoa`;
-  const params = new URLSearchParams({ text, url: pageUrl });
+  const params = new URLSearchParams({ text: SHARE_POST_TEXT, url: pageUrl });
   return `https://twitter.com/intent/tweet?${params.toString()}`;
 }
 
