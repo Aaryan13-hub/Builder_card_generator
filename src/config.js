@@ -42,7 +42,7 @@ module.exports = {
   },
 
   TEXT: {
-    hashtag: { x: 540, y: 335, font: '600 30px "Arial"', color: '#E040C0', text: '#FRAMEINGOA' },
+    hashtag: { x: 540, y: 335, font: '600 30px "RobotoRegular"', color: '#E040C0', text: '#FRAMEINGOA' },
     // Card zone geometry — detected from templates/card_template.jpg
     // (template-work/find_dividers.js): two divider lines inside the
     // cream card at y=928 and y=1019. Title+name live above the first
@@ -52,9 +52,9 @@ module.exports = {
     cardWidth: 708,
     divider1Y: 928,
     divider2Y: 1019,
-    title: { y: 855, font: 'italic bold 28px "Georgia"', color: '#00ffd0ff' },     // builder tag — purple, above divider wave
-    name: { yStart: 985, font: 'bold 56px "Arial"', color: '#F2C744', lineHeight: 90 },  // pushed below divider1Y=928 so wave line never crosses text
-    role: { y: 1060, font: 'bold 50px "Arial"', color: '#f4c12aff' },                    // 50px matches old baked-in FRONTEND DEVELOPER size
+    title: { y: 855, font: 'italic bold 28px "RobotoItalic"', color: '#00ffd0ff' },     // builder tag — bundled RobotoItalic (works on Linux/Vercel)
+    name: { yStart: 985, font: 'bold 56px "Roboto"', color: '#F2C744', lineHeight: 90 },  // bundled Roboto Bold
+    role: { y: 1060, font: 'bold 50px "Roboto"', color: '#f4c12aff' },                   // bundled Roboto Bold
   },
 
   STORAGE_TTL_MS: 1000 * 60 * 60 * 24, // 24h — generated cards auto-expire

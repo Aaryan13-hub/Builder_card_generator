@@ -1,5 +1,6 @@
 const fs = require("fs");
-const { createCanvas, loadImage } = require("@napi-rs/canvas");
+const path = require("path");
+const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const {
   CARD_WIDTH,
   CARD_HEIGHT,
@@ -7,6 +8,13 @@ const {
   TEMPLATE_PATH,
   TEXT,
 } = require("./config");
+
+// Register bundled fonts so text renders correctly on Vercel's Linux environment
+// (Arial and Georgia are Windows/Mac system fonts — not available on Linux).
+const FONTS_DIR = path.join(__dirname, '..', 'fonts');
+GlobalFonts.registerFromPath(path.join(FONTS_DIR, 'Roboto-Bold.ttf'), 'Roboto');
+GlobalFonts.registerFromPath(path.join(FONTS_DIR, 'Roboto-BoldItalic.ttf'), 'RobotoItalic');
+GlobalFonts.registerFromPath(path.join(FONTS_DIR, 'Roboto-Regular.ttf'), 'RobotoRegular');
 
 /**
  * Wraps text to a max width, returns array of lines (used for long names).
