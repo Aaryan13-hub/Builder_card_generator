@@ -52,9 +52,9 @@ module.exports = {
     cardWidth: 708,
     divider1Y: 928,
     divider2Y: 1019,
-    title: { y: 805, font: 'italic bold 26px "Georgia"', color: '#7A1FA2' },     // "Terminal Wizard"
-    name: { yStart: 862, font: 'bold 42px "Arial"', color: '#1B1B1B', lineHeight: 50 },
-    role: { y: 978, font: 'bold 30px "Arial"', color: '#7A4A00' },
+    title: { y: 855, font: 'italic bold 28px "Georgia"', color: '#00ffd0ff' },     // builder tag — purple, above divider wave
+    name: { yStart: 985, font: 'bold 56px "Arial"', color: '#F2C744', lineHeight: 90 },  // pushed below divider1Y=928 so wave line never crosses text
+    role: { y: 1060, font: 'bold 50px "Arial"', color: '#f4c12aff' },                    // 50px matches old baked-in FRONTEND DEVELOPER size
   },
 
   STORAGE_TTL_MS: 1000 * 60 * 60 * 24, // 24h — generated cards auto-expire
