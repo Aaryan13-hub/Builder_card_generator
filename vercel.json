@@ -1,0 +1,15 @@
+{
+  "regions": ["bom1"],
+  "functions": {
+    "src/server.js": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/health",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

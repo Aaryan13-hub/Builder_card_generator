@@ -33,7 +33,7 @@ async function saveCard(pngBuffer, fields) {
       pngBuffer,
       {
         access: 'public',
-        contentType: 'image/png',
+        contentType: 'image/jpeg',
       }
     );
 

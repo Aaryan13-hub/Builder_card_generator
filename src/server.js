@@ -3,7 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 
-const { normalizeToJpeg, cropToCircleSource } = require('./imagePrep');
+const { normalizeAndCrop } = require('./imagePrep');
 const { composeCard } = require('./compositor');
 const { generateBuilderTitle, hashString } = require('./builderTitles');
 const { saveCard, getCard } = require('./storage');
@@ -56,15 +56,15 @@ app.post('/api/generate', upload.single('photo'), async (req, res) => {
       }
     }
 
-    // 1. Normalize upload (handles HEIC/JPG/PNG/WEBP, EXIF rotation)
-    const { buffer: jpegBuffer, width, height } = await normalizeToJpeg(
-      req.file.buffer,
-      req.file.originalname
-    );
-
-    // 2. Crop to the circle, centered on the face (or fallback heuristic)
+    // 1+2. Normalize (EXIF rotate, colorspace) AND crop to circle in one Sharp
+    //       pipeline — saves a full encode/decode round trip vs the old two-step.
     const circleDiameter = CIRCLE.r * 2;
-    const circlePhoto = await cropToCircleSource(jpegBuffer, width, height, faceBox, circleDiameter);
+    const circlePhoto = await normalizeAndCrop(
+      req.file.buffer,
+      req.file.originalname,
+      faceBox,
+      circleDiameter
+    );
 
     // 3. Generate the fun builder title (deterministic per name+role so
     //    regenerating the same person doesn't reshuffle it randomly)
@@ -105,7 +105,7 @@ app.get('/api/card/:id.png', async (req, res) => {
   const entry = getCard(id);
   if (!entry) return res.status(404).send('Not found or expired');
 
-  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Content-Type', 'image/jpeg');
   if (req.query.download) {
     res.setHeader('Content-Disposition', `attachment; filename="hh-goa-2026-${id}.png"`);
   }
