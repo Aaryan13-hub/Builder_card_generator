@@ -11,10 +11,10 @@ module.exports = {
 
   // Path to the fixed background art (transparent hole where the photo goes).
   // Currently a generated placeholder — replace with final design export.
-  TEMPLATE_PATH: path.join(__dirname, '..', 'templates', 'card_template.png'),
+  TEMPLATE_PATH: path.join(__dirname, '..', 'templates', 'card_template.jpg'),
 
   // Circular photo window (center x/y, radius) — in card pixel coordinates.
-  // Detected from the real design (templates/card_template.png) via
+  // Detected from the real design (templates/card_template.jpg) via
   // tools/makeTemplateFromDesign.js — re-run that script and update these
   // if the design art changes.
   CIRCLE: {
@@ -43,7 +43,7 @@ module.exports = {
 
   TEXT: {
     hashtag: { x: 540, y: 335, font: '600 30px "Arial"', color: '#E040C0', text: '#FRAMEINGOA' },
-    // Card zone geometry — detected from templates/card_template.png
+    // Card zone geometry — detected from templates/card_template.jpg
     // (template-work/find_dividers.js): two divider lines inside the
     // cream card at y=928 and y=1019. Title+name live above the first
     // divider; role lives between the two dividers; below the second
