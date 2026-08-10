@@ -1,0 +1,23 @@
+{
+  "name": "hh-goa-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "build-template": "node src/generateTemplate.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "heic-convert": "^2.1.0",
+    "multer": "^2.2.0",
+    "nanoid": "^6.0.1",
+    "sharp": "^0.35.3"
+  }
+}

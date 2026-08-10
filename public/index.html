@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Hacker House Goa 2026 — Builder Card</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="page-header">
+      <h1>Hacker House Goa 2026</h1>
+      <p class="subtitle">Build your Builder ID card — upload a photo, get your card, share it.</p>
+    </header>
+
+    <!-- STEP 1: form -->
+    <section id="formSection" class="card">
+      <div class="field">
+        <label for="photoInput">Your photo</label>
+        <input type="file" id="photoInput" accept="image/*,.heic,.heif" />
+        <p class="hint" id="photoHint">JPG, PNG, or iPhone HEIC. We'll auto-crop around your face.</p>
+      </div>
+
+      <div class="preview-wrap" id="previewWrap" hidden>
+        <canvas id="previewCanvas"></canvas>
+        <p class="hint" id="detectionStatus">Detecting face…</p>
+      </div>
+
+      <div class="field">
+        <label for="nameInput">Name</label>
+        <input type="text" id="nameInput" placeholder="Your name" maxlength="60" />
+      </div>
+
+      <div class="field">
+        <label for="roleInput">Role / stack</label>
+        <input type="text" id="roleInput" placeholder="e.g. Frontend Developer" maxlength="60" />
+      </div>
+
+      <button id="generateBtn" class="btn primary" disabled>Generate my card</button>
+      <p class="error" id="formError" hidden></p>
+    </section>
+
+    <!-- STEP 2: result -->
+    <section id="resultSection" class="card" hidden>
+      <img id="resultImage" alt="Your generated Hacker House Goa card" />
+      <div class="actions">
+        <a id="downloadBtn" class="btn" download>Download</a>
+        <button id="shareBtn" class="btn primary">Share to X</button>
+      </div>
+      <button id="startOverBtn" class="btn link">Make another</button>
+    </section>
+
+    <!-- loading overlay -->
+    <div id="loadingOverlay" class="loading-overlay" hidden>
+      <div class="spinner"></div>
+      <p id="loadingText">Generating your card…</p>
+    </div>
+  </main>
+
+  <!-- face-api.js (browser IIFE build, bundles TF.js, exposes global `faceapi`) -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+  <!-- heic-to (actively maintained HEIC/HEIF -> JPEG converter, exposes global `HeicTo`) -->
+  <script src="https://cdn.jsdelivr.net/npm/heic-to@1.5.2/dist/iife/heic-to.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
