@@ -586,7 +586,7 @@ function renderFrameCard() {
   }
 }
 
-// ---- Frame Photo Upload ----
+// ---- Frame Photo Upload (with face-aware centering) ----
 async function handleFramePhotoUpload(file) {
   try {
     let workingBlob = file;
@@ -619,9 +619,50 @@ async function handleFramePhotoUpload(file) {
 
     frameUploadedImage = img;
 
-    // Reset reposition state for new photo
-    framePhotoOffsetX = 0;
-    framePhotoOffsetY = 0;
+    // ---- Face-aware initial offset ----
+    // Detect the face and compute an offset so the face lands at circle center.
+    // Falls back to (0,0) i.e. image center if no face detected.
+    let initialOffsetX = 0;
+    let initialOffsetY = 0;
+
+    const modelsReady = await modelsReadyPromise; // reuse already-loaded face-api models
+    if (modelsReady && frameUploadedImage) {
+      try {
+        const tempCanvas = document.createElement('canvas');
+        const { w, h } = drawScaledToCanvas(img, tempCanvas); // reuse existing helper
+        const det = await faceapi.detectSingleFace(
+          tempCanvas,
+          new faceapi.TinyFaceDetectorOptions()
+        );
+        if (det) {
+          // Face center as fraction of the full image
+          const faceCenterXFrac = (det.box.x + det.box.width / 2) / w;
+          const faceCenterYFrac = (det.box.y + det.box.height / 2) / h;
+
+          // Compute the cover-fit draw dimensions at scale=1
+          const { radius } = FRAME_TEMPLATE.photo;
+          const diameter = radius * 2;
+          const imgAspect = img.naturalWidth / img.naturalHeight;
+          let drawW, drawH;
+          if (imgAspect > 1) {
+            drawH = diameter;
+            drawW = diameter * imgAspect;
+          } else {
+            drawW = diameter;
+            drawH = diameter / imgAspect;
+          }
+
+          // Offset so detected face center ends up at circle center
+          initialOffsetX = -(faceCenterXFrac - 0.5) * drawW;
+          initialOffsetY = -(faceCenterYFrac - 0.5) * drawH;
+        }
+      } catch (faceErr) {
+        console.warn('Frame face detection failed, using center:', faceErr);
+      }
+    }
+
+    framePhotoOffsetX = initialOffsetX;
+    framePhotoOffsetY = initialOffsetY;
     framePhotoScale = 1;
     frameZoomSlider.value = '1';
 
@@ -804,19 +845,18 @@ frameDownloadBtn.addEventListener('click', (e) => {
   }, 'image/png');
 });
 
-// ---- Frame Share ----
+// ---- Frame Share (with Vercel Blob upload fallback for desktop) ----
 frameShareBtn.addEventListener('click', async () => {
   if (!frameUploadedImage || !frameTemplateImage) return;
 
   renderFrameCard();
 
-  // Try native share with image file
+  const blob = await new Promise((resolve) => frameCanvas.toBlob(resolve, 'image/png'));
+  if (!blob) { alert('Could not export the card. Please try again.'); return; }
+
+  // 1. Try native share with actual image file (best on mobile)
   try {
-    const blob = await new Promise((resolve) => frameCanvas.toBlob(resolve, 'image/png'));
-    if (!blob) throw new Error('Canvas export failed');
-
     const file = new File([blob], 'hh-goa-2026-profile-frame.png', { type: 'image/png' });
-
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({
         files: [file],
@@ -826,12 +866,38 @@ frameShareBtn.addEventListener('click', async () => {
     }
   } catch (err) {
     if (err && err.name === 'AbortError') return;
-    console.warn('Native share failed, falling back to intent:', err);
+    console.warn('Native share unavailable, falling back to upload:', err);
   }
 
-  // Fallback: X/Twitter intent without image
-  const intentUrl = buildShareIntentUrl(window.location.href);
-  window.open(intentUrl, '_blank');
+  // 2. Desktop fallback: upload PNG to server → Vercel Blob → share page with OG tags
+  const origHTML = frameShareBtn.innerHTML;
+  frameShareBtn.disabled = true;
+  frameShareBtn.textContent = 'Uploading\u2026';
+
+  try {
+    const shareName = nameInput.value.trim() || 'Builder';
+    const formData = new FormData();
+    formData.append('image', blob, 'frame.png');
+    formData.append('name', shareName);
+
+    const res = await fetch(`${API_BASE}/api/frame-share`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+    // Open X intent that links to share page (which has OG image from Vercel Blob)
+    window.open(data.intentUrl, '_blank');
+  } catch (uploadErr) {
+    console.error('Frame share upload error:', uploadErr);
+    // Last-resort fallback: X intent with just the homepage URL
+    window.open(buildShareIntentUrl(window.location.href), '_blank');
+  } finally {
+    frameShareBtn.disabled = false;
+    frameShareBtn.innerHTML = origHTML;
+    if (window.lucide) lucide.createIcons();
+  }
 });
 
 // ---- Frame State Reset (shared helper) ----
