@@ -22,6 +22,9 @@ const upload = multer({
 const SHARE_POST_TEXT =
   'Built my HH Goa 2026 frame and I’m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa';
 
+const FRAME_SHARE_POST_TEXT =
+  'I just created my Hacker House Goa 2026 frame! #FrameInGoa';
+
 // Base URL used to build absolute links for OG tags / share intents.
 // Override with PUBLIC_BASE_URL env var when deployed.
 const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
@@ -240,8 +243,10 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
     });
 
     res.json({
+      imageUrl,
       sharePageUrl,
-      intentUrl: buildTweetIntent(sharePageUrl),
+      // Blob's public HTTPS URL does not rely on serverless in-memory state.
+      intentUrl: buildFrameTweetIntent(imageUrl),
     });
   } catch (err) {
     console.error('frame-share error:', err);
@@ -345,6 +350,11 @@ setInterval(() => {
 
 function buildTweetIntent(pageUrl) {
   const params = new URLSearchParams({ text: SHARE_POST_TEXT, url: pageUrl });
+  return `https://twitter.com/intent/tweet?${params.toString()}`;
+}
+
+function buildFrameTweetIntent(imageUrl) {
+  const params = new URLSearchParams({ text: FRAME_SHARE_POST_TEXT, url: imageUrl });
   return `https://twitter.com/intent/tweet?${params.toString()}`;
 }
 

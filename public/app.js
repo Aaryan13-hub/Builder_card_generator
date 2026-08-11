@@ -6,6 +6,9 @@ const API_BASE = ""; // same-origin (server also serves this static site)
 const SHARE_POST_TEXT =
   "Built my HH Goa 2026 frame and I’m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa";
 
+const FRAME_SHARE_POST_TEXT =
+  "I just created my Hacker House Goa 2026 frame! #FrameInGoa";
+
 // ---- DOM refs ----------------------------------------------------------
 const photoInput = document.getElementById("photoInput");
 const previewWrap = document.getElementById("previewWrap");
@@ -65,6 +68,21 @@ function updateGenerateEnabled() {
 function buildShareIntentUrl(sharePageUrl) {
   const params = new URLSearchParams({ text: SHARE_POST_TEXT, url: sharePageUrl });
   return `https://twitter.com/intent/tweet?${params.toString()}`;
+}
+
+function buildFrameShareIntentUrl(publicImageUrl) {
+  const params = new URLSearchParams({
+    text: FRAME_SHARE_POST_TEXT,
+    url: publicImageUrl,
+  });
+  return `https://twitter.com/intent/tweet?${params.toString()}`;
+}
+
+function isMobileBrowser() {
+  if (navigator.userAgentData && typeof navigator.userAgentData.mobile === "boolean") {
+    return navigator.userAgentData.mobile;
+  }
+  return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
 async function isHeicFile(file) {
@@ -849,27 +867,35 @@ frameDownloadBtn.addEventListener('click', (e) => {
 frameShareBtn.addEventListener('click', async () => {
   if (!frameUploadedImage || !frameTemplateImage) return;
 
+  const useNativeMobileShare = isMobileBrowser();
+  // Open synchronously so desktop popup blockers allow the later X navigation.
+  const xWindow = useNativeMobileShare ? null : window.open('', '_blank');
+  if (xWindow) xWindow.opener = null;
+
   renderFrameCard();
 
   const blob = await new Promise((resolve) => frameCanvas.toBlob(resolve, 'image/png'));
-  if (!blob) { alert('Could not export the card. Please try again.'); return; }
-
-  // 1. Try native share with actual image file (best on mobile)
-  try {
-    const file = new File([blob], 'hh-goa-2026-profile-frame.png', { type: 'image/png' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({
-        files: [file],
-        text: SHARE_POST_TEXT,
-      });
-      return;
-    }
-  } catch (err) {
-    if (err && err.name === 'AbortError') return;
-    console.warn('Native share unavailable, falling back to upload:', err);
+  if (!blob) {
+    if (xWindow && !xWindow.closed) xWindow.close();
+    alert('Could not export the card. Please try again.');
+    return;
   }
 
-  // 2. Desktop fallback: upload PNG to server → Vercel Blob → share page with OG tags
+  // Desktop always opens X directly. Native file sharing is available only on
+  // mobile, where it can share the generated PNG with an installed X app.
+  if (useNativeMobileShare) {
+    try {
+      const file = new File([blob], 'hh-goa-2026-profile-frame.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: FRAME_SHARE_POST_TEXT });
+        return;
+      }
+    } catch (err) {
+      console.warn('Mobile native share unavailable, opening X instead:', err);
+    }
+  }
+
+  // Upload PNG to Vercel Blob, then use its public URL in the X intent.
   const origHTML = frameShareBtn.innerHTML;
   frameShareBtn.disabled = true;
   frameShareBtn.textContent = 'Uploading\u2026';
@@ -887,12 +913,21 @@ frameShareBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');
 
-    // Open X intent that links to share page (which has OG image from Vercel Blob)
-    window.open(data.intentUrl, '_blank');
+    const intentUrl = data.intentUrl || buildFrameShareIntentUrl(data.imageUrl);
+    if (xWindow && !xWindow.closed) {
+      xWindow.location.href = intentUrl;
+    } else {
+      window.open(intentUrl, '_blank', 'noopener');
+    }
   } catch (uploadErr) {
     console.error('Frame share upload error:', uploadErr);
-    // Last-resort fallback: X intent with just the homepage URL
-    window.open(buildShareIntentUrl(window.location.href), '_blank');
+    // If upload fails, still open X with the required frame hashtag.
+    const fallbackIntentUrl = buildFrameShareIntentUrl(window.location.href);
+    if (xWindow && !xWindow.closed) {
+      xWindow.location.href = fallbackIntentUrl;
+    } else {
+      window.open(fallbackIntentUrl, '_blank', 'noopener');
+    }
   } finally {
     frameShareBtn.disabled = false;
     frameShareBtn.innerHTML = origHTML;
