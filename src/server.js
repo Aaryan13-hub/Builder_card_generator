@@ -242,8 +242,9 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
       imageUrl = `${shareBaseUrl}/api/frame-image/${id}.png`;
     }
 
-    // Name is passed statelessly via query param — no in-memory store needed.
-    const sharePageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}`;
+    // Encode the actual blob.url and name directly in the share URL.
+    // This avoids any URL reconstruction guesswork on the GET side.
+    const sharePageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}&img=${encodeURIComponent(imageUrl)}`;
 
     res.json({
       imageUrl,
@@ -282,11 +283,19 @@ app.get('/profile-frame/:id', async (req, res) => {
     ? 'https://builder-card-generator.vercel.app'
     : getRequestBaseUrl(req);
 
-  const imageUrl = await getFrameImageUrl(id, shareBaseUrl);
+  // Prefer the img query param (set by POST /api/frame-share with the exact blob.url).
+  // Fall back to reconstruction only for local dev (where img param isn't set).
+  let imageUrl = req.query.img ? decodeURIComponent(req.query.img) : null;
+  if (!imageUrl) {
+    imageUrl = await getFrameImageUrl(id, shareBaseUrl);
+  }
   if (!imageUrl) return res.status(404).send('Frame not found.');
 
+  // Basic sanity check — imageUrl must be a valid https URL
+  if (!imageUrl.startsWith('https://')) return res.status(400).send('Invalid image URL.');
+
   const name = req.query.n || 'Builder';
-  const pageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}`;
+  const pageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}&img=${encodeURIComponent(imageUrl)}`;
   const title = `${name} is at Hacker House Goa 2026`;
   const description = '#FrameInGoa \u00b7 Hacker House Goa 2026';
   const tweetIntent = buildFrameTweetIntent(pageUrl);
