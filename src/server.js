@@ -84,7 +84,7 @@ app.post('/api/generate', upload.single('photo'), async (req, res) => {
     res.json({
       id,
       generationMs: Date.now() - t0,
-      downloadUrl: `${BASE_URL}/api/card/${id}.png?download=1`,
+      downloadUrl: imageUrl,
       imageUrl,
       sharePageUrl: `${BASE_URL}/card/${id}`,
       shareIntentUrl: buildTweetIntent(`${BASE_URL}/card/${id}`),

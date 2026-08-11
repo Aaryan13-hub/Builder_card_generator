@@ -245,7 +245,7 @@ generateBtn.addEventListener("click", async () => {
     lastGeneratedResult = data;
     resultImage.src = data.imageUrl;
     downloadBtn.href = data.downloadUrl;
-    downloadBtn.setAttribute("download", `hh-goa-2026-${data.id}.png`);
+    downloadBtn.setAttribute("download", `hh-goa-2026-${data.id}.jpg`);
 
     formSection.hidden = true;
     resultSection.hidden = false;
