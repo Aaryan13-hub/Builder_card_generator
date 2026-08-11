@@ -24,10 +24,10 @@ const upload = multer({
 
 // Share text constants
 const SHARE_POST_TEXT =
-  'Built my HH Goa 2026 frame and I\u2019m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa';
+  'Just built my Hacker House Goa 2026 identity \ud83d\udd25\n\n\ud83c\udf34 Goa. Code. Chaos. Creativity.\n\nCook yours:';
 
 const FRAME_SHARE_POST_TEXT =
-  'I just created my Hacker House Goa 2026 profile frame! \u2728 #FrameInGoa #HHGoa2026';
+  'Just built my Hacker House Goa 2026 identity \ud83d\udd25\n\n\ud83c\udf34 Goa. Code. Chaos. Creativity.\n\nCook yours:';
 
 // Base URL used to build absolute links for OG tags / share intents.
 // Override with PUBLIC_BASE_URL env var when deployed.
