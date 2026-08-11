@@ -203,7 +203,7 @@ app.get('/card/:id', (req, res) => {
 
 /**
  * POST /api/frame-share
- * Accepts the client-side-generated Profile Frame PNG, stores it in
+ * Accepts the client-side-generated Profile Frame JPG, stores it in
  * Vercel Blob (production) or local disk (dev). Returns a share page
  * URL with OG tags that X/Twitter will crawl for link previews.
  *
@@ -227,9 +227,9 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
     if (IS_VERCEL) {
       const { put } = require('@vercel/blob');
       const blob = await put(
-        `hh-goa-frames/${id}.png`,
+        `hh-goa-frames/${id}.jpg`,
         req.file.buffer,
-        { access: 'public', addRandomSuffix: false, contentType: 'image/png' }
+        { access: 'public', addRandomSuffix: false, contentType: 'image/jpeg' }
       );
       imageUrl = blob.url;
     } else {
@@ -237,14 +237,13 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
       if (!fs.existsSync(LOCAL_STORAGE_DIR)) {
         fs.mkdirSync(LOCAL_STORAGE_DIR, { recursive: true });
       }
-      const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
+      const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.jpg`);
       fs.writeFileSync(filePath, req.file.buffer);
-      imageUrl = `${shareBaseUrl}/api/frame-image/${id}.png`;
+      imageUrl = `${shareBaseUrl}/api/frame-image/${id}.jpg`;
     }
 
-    // Encode the actual blob.url and name directly in the share URL.
-    // This avoids any URL reconstruction guesswork on the GET side.
-    const sharePageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}&img=${encodeURIComponent(imageUrl)}`;
+    // Name is passed statelessly via query param. No in-memory store needed.
+    const sharePageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}`;
 
     res.json({
       imageUrl,
@@ -258,21 +257,21 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
 });
 
 /**
- * GET /api/frame-image/:id.png — serves locally-stored frame images (dev only).
+ * GET /api/frame-image/:id.jpg — serves locally-stored frame images (dev only).
  */
-app.get('/api/frame-image/:id.png', (req, res) => {
+app.get('/api/frame-image/:id.jpg', (req, res) => {
   const id = req.params.id;
-  const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
+  const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.jpg`);
   if (!fs.existsSync(filePath)) return res.status(404).send('File not found');
 
-  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Content-Type', 'image/jpeg');
   res.sendFile(filePath);
 });
 
 /**
  * GET /profile-frame/:id — Share page with Open Graph + Twitter Card meta tags.
  * When X/Twitter crawls this URL it sees og:image pointing to the actual
- * Vercel Blob PNG, so the link preview shows the real generated card.
+ * Vercel Blob JPG, so the link preview shows the real generated card.
  * No in-memory store lookup — image URL is derived directly from the blob path.
  */
 app.get('/profile-frame/:id', async (req, res) => {
@@ -283,19 +282,14 @@ app.get('/profile-frame/:id', async (req, res) => {
     ? 'https://builder-card-generator.vercel.app'
     : getRequestBaseUrl(req);
 
-  // Prefer the img query param (set by POST /api/frame-share with the exact blob.url).
-  // Fall back to reconstruction only for local dev (where img param isn't set).
-  let imageUrl = req.query.img ? decodeURIComponent(req.query.img) : null;
-  if (!imageUrl) {
-    imageUrl = await getFrameImageUrl(id, shareBaseUrl);
-  }
+  const imageUrl = await getFrameImageUrl(id, shareBaseUrl);
   if (!imageUrl) return res.status(404).send('Frame not found.');
 
   // Basic sanity check — imageUrl must be a valid https URL
   if (!imageUrl.startsWith('https://')) return res.status(400).send('Invalid image URL.');
 
   const name = req.query.n || 'Builder';
-  const pageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}&img=${encodeURIComponent(imageUrl)}`;
+  const pageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}`;
   const title = `${name} is at Hacker House Goa 2026`;
   const description = '#FrameInGoa \u00b7 Hacker House Goa 2026';
   const tweetIntent = buildFrameTweetIntent(pageUrl);
@@ -335,7 +329,7 @@ app.get('/profile-frame/:id', async (req, res) => {
 <body>
   <img src="${imageUrl}" alt="${escapeHtml(title)}" />
   <p>${escapeHtml(description)}</p>
-  <a class="btn download" href="${imageUrl}" download="hh-goa-2026-profile-frame.png">Download</a>
+  <a class="btn download" href="${imageUrl}" download="hh-goa-2026-profile-frame.jpg">Download</a>
   <a class="btn tweet" href="${tweetIntent}" target="_blank" rel="noopener">Share to X</a>
 </body>
 </html>`);
@@ -360,8 +354,8 @@ function getRequestBaseUrl(req) {
  */
 async function getFrameImageUrl(id, baseUrl) {
   if (!IS_VERCEL) {
-    const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
-    return fs.existsSync(filePath) ? `${baseUrl}/api/frame-image/${id}.png` : null;
+    const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.jpg`);
+    return fs.existsSync(filePath) ? `${baseUrl}/api/frame-image/${id}.jpg` : null;
   }
 
   // Direct URL construction from the blob PUT response is the most reliable.
@@ -372,13 +366,13 @@ async function getFrameImageUrl(id, baseUrl) {
   const parts = token.split('_');
   if (parts.length >= 4) {
     const storeId = parts[3];
-    return `https://${storeId}.public.blob.vercel-storage.com/hh-goa-frames/${id}.png`;
+    return `https://${storeId}.public.blob.vercel-storage.com/hh-goa-frames/${id}.jpg`;
   }
 
   // Fallback: use list() (may 404 immediately after upload due to eventual consistency)
   const { list } = require('@vercel/blob');
-  const { blobs } = await list({ prefix: `hh-goa-frames/${id}.png`, limit: 1 });
-  const blob = blobs.find((b) => b.pathname === `hh-goa-frames/${id}.png`);
+  const { blobs } = await list({ prefix: `hh-goa-frames/${id}.jpg`, limit: 1 });
+  const blob = blobs.find((b) => b.pathname === `hh-goa-frames/${id}.jpg`);
   return blob ? blob.url : null;
 }
 

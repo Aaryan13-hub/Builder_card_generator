@@ -880,7 +880,8 @@ frameShareBtn.addEventListener('click', async () => {
 
   renderFrameCard();
 
-  const blob = await new Promise((resolve) => frameCanvas.toBlob(resolve, 'image/png'));
+  // Use JPEG for sharing: ~10x smaller than PNG, well under X's 5MB og:image limit
+  const blob = await new Promise((resolve) => frameCanvas.toBlob(resolve, 'image/jpeg', 0.9));
   if (!blob) {
     if (xWindow && !xWindow.closed) xWindow.close();
     alert('Could not export the card. Please try again.');
@@ -909,7 +910,7 @@ frameShareBtn.addEventListener('click', async () => {
   try {
     const shareName = nameInput.value.trim() || 'Builder';
     const formData = new FormData();
-    formData.append('image', blob, 'frame.png');
+    formData.append('image', blob, 'frame.jpg');
     formData.append('name', shareName);
 
     const res = await fetch(`${API_BASE}/api/frame-share`, {
