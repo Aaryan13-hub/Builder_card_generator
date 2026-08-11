@@ -46,6 +46,7 @@ async function saveCard(pngBuffer, fields) {
     return {
       id,
       publicUrl: blob.url,
+      downloadUrl: blob.downloadUrl
     };
   }
 
