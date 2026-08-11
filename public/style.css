@@ -380,6 +380,11 @@ body {
   text-align: center;
 }
 
+/* Face detection remains internal to the Profile Frame crop; its Builder ID status is no longer shown. */
+#detectionStatus {
+  display: none;
+}
+
 #frameCanvas {
   max-width: 100%;
   height: auto;

@@ -19,12 +19,6 @@
   <main class="wrap">
     <!-- STEP 1: form -->
     <section id="formSection" class="card">
-      <!-- Mode toggle -->
-      <div class="mode-toggle" id="modeToggle">
-        <button class="mode-btn active" data-mode="builder" id="modeBtnBuilder" type="button">BUILDER ID</button>
-        <button class="mode-btn" data-mode="frame" id="modeBtnFrame" type="button">PROFILE FRAME</button>
-      </div>
-
       <div class="field">
         <label for="photoInput"><i data-lucide="camera"></i> Your photo</label>
         <input type="file" id="photoInput" accept="image/*,.heic,.heif" />
@@ -33,13 +27,9 @@
         </p>
       </div>
 
-      <div class="preview-wrap" id="previewWrap" hidden>
-        <canvas id="previewCanvas"></canvas>
         <p class="hint" id="detectionStatus">Detecting face…</p>
-      </div>
-
       <!-- Profile Frame preview (client-side canvas compositing) -->
-      <div id="framePreviewWrap" class="frame-preview-wrap" hidden>
+      <div id="framePreviewWrap" class="frame-preview-wrap">
         <canvas id="frameCanvas" width="1080" height="1350"></canvas>
         <div id="frameControls" class="frame-controls" hidden>
           <div class="frame-zoom-row">
@@ -60,12 +50,6 @@
         <input type="text" id="roleInput" placeholder="e.g. Frontend Developer" maxlength="60" />
       </div>
 
-      <div id="builderOnlySection">
-        <button id="generateBtn" class="btn primary" disabled>
-          <i data-lucide="sparkles"></i> Generate my card
-        </button>
-      </div>
-
       <!-- Profile Frame actions (visible when photo uploaded in frame mode) -->
       <div id="frameActions" class="frame-actions-wrap" hidden>
         <div class="actions">
@@ -75,22 +59,6 @@
         <button id="frameStartOverBtn" class="btn link" type="button"><i data-lucide="rotate-ccw"></i> Start over</button>
       </div>
       <p class="error" id="formError" hidden></p>
-    </section>
-
-    <!-- STEP 2: result -->
-    <section id="resultSection" class="card" hidden>
-      <div class="badge-tilt">
-        <img id="resultImage" alt="Your generated Hacker House Goa card" />
-      </div>
-      <div class="actions">
-        <a id="downloadBtn" class="btn secondary"><i data-lucide="download"></i> Download</a>
-        <button id="shareBtn" class="btn primary">
-          <i data-lucide="share-2"></i> Share to X
-        </button>
-      </div>
-      <button id="startOverBtn" class="btn link">
-        <i data-lucide="rotate-ccw"></i> Make another
-      </button>
     </section>
 
     <!-- loading overlay -->

@@ -58,6 +58,7 @@ function setLoading(isLoading, text) {
   if (text) loadingText.textContent = text;
 }
 function updateGenerateEnabled() {
+  if (!generateBtn) return;
   generateBtn.disabled = !(
     uploadBlob &&
     nameInput.value.trim() &&
@@ -236,7 +237,7 @@ nameInput.addEventListener("input", updateGenerateEnabled);
 roleInput.addEventListener("input", updateGenerateEnabled);
 
 // ---- Generate ---------------------------------------------------------------
-generateBtn.addEventListener("click", async () => {
+generateBtn?.addEventListener("click", async () => {
   if (currentMode === 'frame') return; // safety: frame mode has no Generate step
   clearError();
   if (!uploadBlob) return showError("Please choose a photo first.");
@@ -284,7 +285,7 @@ generateBtn.addEventListener("click", async () => {
 });
 
 
-downloadBtn.addEventListener("click", async (e) => {
+downloadBtn?.addEventListener("click", async (e) => {
   e.preventDefault();
 
   const url = downloadBtn.dataset.downloadUrl;
@@ -329,7 +330,7 @@ downloadBtn.addEventListener("click", async (e) => {
 
 
 // ---- Share to X ---------------------------------------------------------------
-shareBtn.addEventListener("click", async () => {
+shareBtn?.addEventListener("click", async () => {
   if (!lastGeneratedResult) return;
   const { imageUrl, sharePageUrl, shareIntentUrl } = lastGeneratedResult;
   const shareText = SHARE_POST_TEXT;
@@ -382,7 +383,7 @@ shareBtn.addEventListener("click", async () => {
 });
 
 // ---- Start over ---------------------------------------------------------------
-startOverBtn.addEventListener("click", () => {
+startOverBtn?.addEventListener("click", () => {
   uploadBlob = null;
   faceBoxFraction = null;
   lastGeneratedResult = null;
@@ -417,7 +418,7 @@ const builderOnlySection = document.getElementById('builderOnlySection');
 const photoHint = document.getElementById('photoHint');
 
 // ---- Frame State ----
-let currentMode = 'builder'; // 'builder' | 'frame'
+let currentMode = 'frame';
 let frameUploadedImage = null; // HTMLImageElement of user's uploaded photo
 let frameTemplateImage = null; // HTMLImageElement of the loaded template PNG
 let frameObjectUrl = null;     // tracked for memory cleanup
@@ -514,6 +515,11 @@ const frameReadyPromise = (async () => {
     return false;
   }
 })();
+
+// Profile Frame is the only available mode, so show its template immediately.
+frameReadyPromise.then((ready) => {
+  if (ready) renderFrameCard();
+});
 
 // ---- Frame Rendering (synchronous — template + fonts guaranteed loaded before first call) ----
 function renderFrameCard() {
@@ -749,8 +755,8 @@ function setMode(mode) {
   updateGenerateEnabled();
 }
 
-modeBtnBuilder.addEventListener('click', () => setMode('builder'));
-modeBtnFrame.addEventListener('click', () => setMode('frame'));
+modeBtnBuilder?.addEventListener('click', () => setMode('builder'));
+modeBtnFrame?.addEventListener('click', () => setMode('frame'));
 
 // ---- Name/Role live update for frame mode ----
 nameInput.addEventListener('input', () => {
@@ -913,7 +919,7 @@ frameShareBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');
 
-    const intentUrl = data.intentUrl || buildFrameShareIntentUrl(data.imageUrl);
+    const intentUrl = data.intentUrl || buildFrameShareIntentUrl(data.sharePageUrl);
     if (xWindow && !xWindow.closed) {
       xWindow.location.href = intentUrl;
     } else {
@@ -961,7 +967,7 @@ frameStartOverBtn.addEventListener('click', () => {
 });
 
 // Also clean up frame state when Builder ID's Start Over is clicked
-startOverBtn.addEventListener('click', () => {
+startOverBtn?.addEventListener('click', () => {
   resetFrameState();
   framePreviewWrap.hidden = true;
   frameCtx.clearRect(0, 0, frameCanvas.width, frameCanvas.height);

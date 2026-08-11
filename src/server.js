@@ -197,11 +197,7 @@ const IS_VERCEL = !!process.env.VERCEL;
 const LOCAL_STORAGE_DIR = path.join(__dirname, '..', 'storage');
 
 // Separate index for frame shares — never touches Builder ID's storage.js Map
-const frameIndex = new Map();
-
 // TTL for frame shares (24h, same as Builder ID cards)
-const FRAME_TTL_MS = 1000 * 60 * 60 * 24;
-
 /**
  * POST /api/frame-share
  * Accepts the client-side-generated Profile Frame PNG and stores it
@@ -211,8 +207,8 @@ const FRAME_TTL_MS = 1000 * 60 * 60 * 24;
 app.post('/api/frame-share', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'image is required' });
-    const name = (req.body.name || 'Builder').trim();
     const id = nanoid(10);
+    const baseUrl = getRequestBaseUrl(req);
 
     let imageUrl;
 
@@ -221,7 +217,7 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
       const blob = await put(
         `hh-goa-frames/${id}.png`,
         req.file.buffer,
-        { access: 'public', contentType: 'image/png' }
+        { access: 'public', addRandomSuffix: false, contentType: 'image/png' }
       );
       imageUrl = blob.url;
     } else {
@@ -231,22 +227,15 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
       }
       const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
       fs.writeFileSync(filePath, req.file.buffer);
-      imageUrl = `${BASE_URL}/api/frame-image/${id}.png`;
+      imageUrl = `${baseUrl}/api/frame-image/${id}.png`;
     }
 
-    const sharePageUrl = `${BASE_URL}/frame/${id}`;
-
-    frameIndex.set(id, {
-      imageUrl,
-      name,
-      createdAt: Date.now(),
-    });
+    const sharePageUrl = `${baseUrl}/profile-frame/${id}`;
 
     res.json({
       imageUrl,
       sharePageUrl,
-      // Blob's public HTTPS URL does not rely on serverless in-memory state.
-      intentUrl: buildFrameTweetIntent(imageUrl),
+      intentUrl: buildFrameTweetIntent(sharePageUrl),
     });
   } catch (err) {
     console.error('frame-share error:', err);
@@ -259,9 +248,6 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
  */
 app.get('/api/frame-image/:id.png', (req, res) => {
   const id = req.params.id;
-  const entry = frameIndex.get(id);
-  if (!entry) return res.status(404).send('Not found or expired');
-
   const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
   if (!fs.existsSync(filePath)) return res.status(404).send('File not found');
 
@@ -274,22 +260,18 @@ app.get('/api/frame-image/:id.png', (req, res) => {
  * When X/Twitter crawls this URL it sees og:image pointing to the actual
  * Vercel Blob PNG, so the link preview shows the real generated card.
  */
-app.get('/frame/:id', (req, res) => {
+app.get('/profile-frame/:id', async (req, res) => {
   const id = req.params.id;
-  const entry = frameIndex.get(id);
-  if (!entry) return res.status(404).send('This frame card has expired or does not exist.');
+  if (!/^[A-Za-z0-9_-]{10}$/.test(id)) return res.status(404).send('Frame not found.');
 
-  // Check TTL
-  if (Date.now() - entry.createdAt > FRAME_TTL_MS) {
-    frameIndex.delete(id);
-    return res.status(404).send('This frame card has expired.');
-  }
+  const baseUrl = getRequestBaseUrl(req);
+  const imageUrl = await getFrameImageUrl(id, baseUrl);
+  if (!imageUrl) return res.status(404).send('Frame not found.');
 
-  const { imageUrl, name } = entry;
-  const pageUrl = `${BASE_URL}/frame/${id}`;
-  const title = `${name} is at Hacker House Goa 2026`;
+  const pageUrl = `${baseUrl}/profile-frame/${id}`;
+  const title = 'Hacker House Goa 2026 Profile Frame';
   const description = '#FrameInGoa \u00b7 Hacker House Goa 2026';
-  const tweetIntent = buildTweetIntent(pageUrl);
+  const tweetIntent = buildFrameTweetIntent(pageUrl);
 
   res.setHeader('Content-Type', 'text/html');
   res.send(`<!DOCTYPE html>
@@ -332,29 +314,34 @@ app.get('/frame/:id', (req, res) => {
 </html>`);
 });
 
-// Periodic cleanup for expired frame shares
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, entry] of frameIndex.entries()) {
-    if (now - entry.createdAt > FRAME_TTL_MS) {
-      // Best-effort blob cleanup
-      if (IS_VERCEL && entry.imageUrl) {
-        try { const { del } = require('@vercel/blob'); del(entry.imageUrl); } catch {}
-      } else {
-        try { fs.unlinkSync(path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`)); } catch {}
-      }
-      frameIndex.delete(id);
-    }
+function getRequestBaseUrl(req) {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+
+  const protocol = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
+  const host = String(req.headers['x-forwarded-host'] || req.get('host'));
+  return `${protocol}://${host}`;
+}
+
+async function getFrameImageUrl(id, baseUrl) {
+  if (!IS_VERCEL) {
+    const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
+    return fs.existsSync(filePath) ? `${baseUrl}/api/frame-image/${id}.png` : null;
   }
-}, 1000 * 60 * 30).unref();
+
+  const pathname = `hh-goa-frames/${id}.png`;
+  const { list } = require('@vercel/blob');
+  const { blobs } = await list({ prefix: pathname, limit: 1 });
+  const blob = blobs.find((candidate) => candidate.pathname === pathname);
+  return blob ? blob.url : null;
+}
 
 function buildTweetIntent(pageUrl) {
   const params = new URLSearchParams({ text: SHARE_POST_TEXT, url: pageUrl });
   return `https://twitter.com/intent/tweet?${params.toString()}`;
 }
 
-function buildFrameTweetIntent(imageUrl) {
-  const params = new URLSearchParams({ text: FRAME_SHARE_POST_TEXT, url: imageUrl });
+function buildFrameTweetIntent(sharePageUrl) {
+  const params = new URLSearchParams({ text: FRAME_SHARE_POST_TEXT, url: sharePageUrl });
   return `https://twitter.com/intent/tweet?${params.toString()}`;
 }
 
