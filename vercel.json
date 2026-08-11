@@ -2,6 +2,11 @@
   "regions": [
     "bom1"
   ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/src/server.js" },
+    { "source": "/card/(.*)", "destination": "/src/server.js" },
+    { "source": "/profile-frame/(.*)", "destination": "/src/server.js" }
+  ],
   "functions": {
     "src/server.js": {
       "memory": 1024,

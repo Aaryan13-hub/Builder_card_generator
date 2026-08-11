@@ -2,12 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 const { normalizeAndCrop } = require('./imagePrep');
 const { composeCard } = require('./compositor');
 const { generateBuilderTitle, hashString } = require('./builderTitles');
 const { saveCard, getCard } = require('./storage');
 const { CIRCLE } = require('./config');
+const { nanoid } = require('nanoid');
 
 const app = express();
 app.use(cors());
@@ -19,15 +21,24 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB, generous for phone camera JPG/HEIC
 });
+
+// Share text constants
 const SHARE_POST_TEXT =
-  'Built my HH Goa 2026 frame and I’m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa';
+  'Built my HH Goa 2026 frame and I\u2019m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa';
 
 const FRAME_SHARE_POST_TEXT =
-  'I just created my Hacker House Goa 2026 frame! #FrameInGoa';
+  'I just created my Hacker House Goa 2026 profile frame! \u2728 #FrameInGoa #HHGoa2026';
 
 // Base URL used to build absolute links for OG tags / share intents.
 // Override with PUBLIC_BASE_URL env var when deployed.
 const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+
+const IS_VERCEL = !!process.env.VERCEL;
+const LOCAL_STORAGE_DIR = path.join(__dirname, '..', 'storage');
+
+// ==============================================================
+// BUILDER ID — Existing routes (DO NOT MODIFY)
+// ==============================================================
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -101,7 +112,7 @@ app.post('/api/generate', upload.single('photo'), async (req, res) => {
 });
 
 /**
- * GET /api/card/:id.png — serves the raw generated image.
+ * GET /api/card/:id.jpg — serves the raw generated image.
  * ?download=1 forces a Content-Disposition attachment for the download button.
  */
 app.get('/api/card/:id.jpg', async (req, res) => {
@@ -142,7 +153,7 @@ app.get('/card/:id', (req, res) => {
   const pageUrl = `${BASE_URL}/card/${id}`;
   const { name, builderTitle } = entry.fields;
   const title = `${name} is at Hacker House Goa 2026`;
-  const description = `${builderTitle} · #FrameInGoa`;
+  const description = `${builderTitle} \u00b7 #FrameInGoa`;
   const tweetIntent = buildTweetIntent(pageUrl);
 
   res.setHeader('Content-Type', 'text/html');
@@ -190,25 +201,26 @@ app.get('/card/:id', (req, res) => {
 // PROFILE FRAME — Share endpoints (separate from Builder ID)
 // ==============================================================
 
-const fs = require('fs');
-const { nanoid } = require('nanoid');
-
-const IS_VERCEL = !!process.env.VERCEL;
-const LOCAL_STORAGE_DIR = path.join(__dirname, '..', 'storage');
-
-// Separate index for frame shares — never touches Builder ID's storage.js Map
-// TTL for frame shares (24h, same as Builder ID cards)
 /**
  * POST /api/frame-share
- * Accepts the client-side-generated Profile Frame PNG and stores it
- * in Vercel Blob (production) or local disk (dev). Returns a share
- * page URL with OG tags that X/Twitter will crawl for link previews.
+ * Accepts the client-side-generated Profile Frame PNG, stores it in
+ * Vercel Blob (production) or local disk (dev). Returns a share page
+ * URL with OG tags that X/Twitter will crawl for link previews.
+ *
+ * Uses the stable production domain so the link always resolves even
+ * when requested from a deployment-specific preview URL.
  */
 app.post('/api/frame-share', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'image is required' });
     const id = nanoid(10);
-    const baseUrl = getRequestBaseUrl(req);
+    const name = (req.body.name || 'Builder').trim();
+
+    // Always use the stable production domain for share links on Vercel.
+    // This prevents deployment-specific hash URLs appearing in posts.
+    const shareBaseUrl = IS_VERCEL
+      ? 'https://builder-card-generator.vercel.app'
+      : getRequestBaseUrl(req);
 
     let imageUrl;
 
@@ -227,10 +239,11 @@ app.post('/api/frame-share', upload.single('image'), async (req, res) => {
       }
       const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
       fs.writeFileSync(filePath, req.file.buffer);
-      imageUrl = `${baseUrl}/api/frame-image/${id}.png`;
+      imageUrl = `${shareBaseUrl}/api/frame-image/${id}.png`;
     }
 
-    const sharePageUrl = `${baseUrl}/profile-frame/${id}`;
+    // Name is passed statelessly via query param — no in-memory store needed.
+    const sharePageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}`;
 
     res.json({
       imageUrl,
@@ -256,20 +269,25 @@ app.get('/api/frame-image/:id.png', (req, res) => {
 });
 
 /**
- * GET /frame/:id — Share page with Open Graph + Twitter Card meta tags.
+ * GET /profile-frame/:id — Share page with Open Graph + Twitter Card meta tags.
  * When X/Twitter crawls this URL it sees og:image pointing to the actual
  * Vercel Blob PNG, so the link preview shows the real generated card.
+ * No in-memory store lookup — image URL is derived directly from the blob path.
  */
 app.get('/profile-frame/:id', async (req, res) => {
   const id = req.params.id;
   if (!/^[A-Za-z0-9_-]{10}$/.test(id)) return res.status(404).send('Frame not found.');
 
-  const baseUrl = getRequestBaseUrl(req);
-  const imageUrl = await getFrameImageUrl(id, baseUrl);
+  const shareBaseUrl = IS_VERCEL
+    ? 'https://builder-card-generator.vercel.app'
+    : getRequestBaseUrl(req);
+
+  const imageUrl = await getFrameImageUrl(id, shareBaseUrl);
   if (!imageUrl) return res.status(404).send('Frame not found.');
 
-  const pageUrl = `${baseUrl}/profile-frame/${id}`;
-  const title = 'Hacker House Goa 2026 Profile Frame';
+  const name = req.query.n || 'Builder';
+  const pageUrl = `${shareBaseUrl}/profile-frame/${id}?n=${encodeURIComponent(name)}`;
+  const title = `${name} is at Hacker House Goa 2026`;
   const description = '#FrameInGoa \u00b7 Hacker House Goa 2026';
   const tweetIntent = buildFrameTweetIntent(pageUrl);
 
@@ -314,6 +332,10 @@ app.get('/profile-frame/:id', async (req, res) => {
 </html>`);
 });
 
+// ==============================================================
+// Shared helpers
+// ==============================================================
+
 function getRequestBaseUrl(req) {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
 
@@ -322,16 +344,32 @@ function getRequestBaseUrl(req) {
   return `${protocol}://${host}`;
 }
 
+/**
+ * Derive the public Vercel Blob URL for a frame without relying on list()
+ * (which has eventual-consistency delays immediately after upload).
+ * Falls back to list() if the token format is unexpected.
+ */
 async function getFrameImageUrl(id, baseUrl) {
   if (!IS_VERCEL) {
     const filePath = path.join(LOCAL_STORAGE_DIR, `frame-${id}.png`);
     return fs.existsSync(filePath) ? `${baseUrl}/api/frame-image/${id}.png` : null;
   }
 
-  const pathname = `hh-goa-frames/${id}.png`;
+  // Direct URL construction from the blob PUT response is the most reliable.
+  // The blob.url returned by put() is already the canonical CDN URL — we stored
+  // it via the POST endpoint so we can re-derive it from the known pathname.
+  // Token format: vercel_blob_rw_<storeId>_<secret>
+  const token = process.env.BLOB_READ_WRITE_TOKEN || '';
+  const parts = token.split('_');
+  if (parts.length >= 4) {
+    const storeId = parts[3];
+    return `https://${storeId}.public.blob.vercel-storage.com/hh-goa-frames/${id}.png`;
+  }
+
+  // Fallback: use list() (may 404 immediately after upload due to eventual consistency)
   const { list } = require('@vercel/blob');
-  const { blobs } = await list({ prefix: pathname, limit: 1 });
-  const blob = blobs.find((candidate) => candidate.pathname === pathname);
+  const { blobs } = await list({ prefix: `hh-goa-frames/${id}.png`, limit: 1 });
+  const blob = blobs.find((b) => b.pathname === `hh-goa-frames/${id}.png`);
   return blob ? blob.url : null;
 }
 
