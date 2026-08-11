@@ -244,8 +244,8 @@ generateBtn.addEventListener("click", async () => {
 
     lastGeneratedResult = data;
     resultImage.src = data.imageUrl;
-    downloadBtn.href = data.downloadUrl;
-    downloadBtn.setAttribute("download", `hh-goa-2026-${data.id}.jpg`);
+    downloadBtn.dataset.downloadUrl = data.downloadUrl;
+    downloadBtn.dataset.filename = `hh-goa-2026-${data.id}.jpg`;
 
     formSection.hidden = true;
     resultSection.hidden = false;
@@ -256,6 +256,54 @@ generateBtn.addEventListener("click", async () => {
     setLoading(false);
   }
 });
+
+
+downloadBtn.addEventListener("click", async (e) => {
+  e.preventDefault();
+
+  const downloadUrl = downloadBtn.dataset.downloadUrl;
+  const filename =
+    downloadBtn.dataset.filename || "hh-goa-2026.jpg";
+
+  if (!downloadUrl) {
+    console.error("Download URL missing");
+    return;
+  }
+
+  try {
+    downloadBtn.style.pointerEvents = "none";
+    downloadBtn.style.opacity = "0.6";
+
+    const response = await fetch(downloadUrl);
+
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+
+    const blobUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(blobUrl);
+
+  } catch (error) {
+    console.error("Download error:", error);
+    alert("Could not download the card. Please try again.");
+
+  } finally {
+    downloadBtn.style.pointerEvents = "";
+    downloadBtn.style.opacity = "";
+  }
+});
+
 
 // ---- Share to X ---------------------------------------------------------------
 shareBtn.addEventListener("click", async () => {

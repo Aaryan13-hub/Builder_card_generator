@@ -72,19 +72,20 @@ app.post('/api/generate', upload.single('photo'), async (req, res) => {
     const builderTitle = generateBuilderTitle(role, seed);
 
     // 4. Composite final card
-    const pngBuffer = await composeCard(circlePhoto, { name, role, builderTitle });
+    const cardBuffer = await composeCard(circlePhoto, { name, role, builderTitle });
 
     // 5. Store + return shareable links
-    const { id, publicUrl } = await saveCard(pngBuffer, { name, role, builderTitle });
+    const { id, publicUrl } = await saveCard(cardBuffer, { name, role, builderTitle });
 
     // Use the blob CDN URL directly for imageUrl when available (Vercel),
     // otherwise fall back to our own serving endpoint (local dev).
     const imageUrl = publicUrl || `${BASE_URL}/api/card/${id}.png`;
+    const downloadUrl = `${BASE_URL}/api/card/${id}.jpg?download=1`;
 
     res.json({
       id,
       generationMs: Date.now() - t0,
-      downloadUrl: downloadUrl || imageUrl,
+      downloadUrl,
       imageUrl,
       sharePageUrl: `${BASE_URL}/card/${id}`,
       shareIntentUrl: buildTweetIntent(`${BASE_URL}/card/${id}`),
@@ -100,14 +101,14 @@ app.post('/api/generate', upload.single('photo'), async (req, res) => {
  * GET /api/card/:id.png — serves the raw generated image.
  * ?download=1 forces a Content-Disposition attachment for the download button.
  */
-app.get('/api/card/:id.png', async (req, res) => {
+app.get('/api/card/:id.jpg', async (req, res) => {
   const id = req.params.id;
   const entry = getCard(id);
   if (!entry) return res.status(404).send('Not found or expired');
 
   res.setHeader('Content-Type', 'image/jpeg');
   if (req.query.download) {
-    res.setHeader('Content-Disposition', `attachment; filename="hh-goa-2026-${id}.png"`);
+    res.setHeader('Content-Disposition', `attachment; filename="hh-goa-2026-${id}.jpg"`);
   }
 
   if (entry.publicUrl) {
@@ -133,7 +134,8 @@ app.get('/card/:id', (req, res) => {
 
   // Prefer the blob CDN URL for OG image (stable, publicly accessible);
   // fall back to our own serving route for local dev.
-  const imageUrl = entry.publicUrl || `${BASE_URL}/api/card/${id}.png`;
+  const imageUrl = entry.publicUrl || `${BASE_URL}/api/card/${id}.jpg`;
+  const downloadUrl = entry.downloadUrl || `${BASE_URL}/api/card/${id}.jpg?download=1`;
   const pageUrl = `${BASE_URL}/card/${id}`;
   const { name, builderTitle } = entry.fields;
   const title = `${name} is at Hacker House Goa 2026`;
