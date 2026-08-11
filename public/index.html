@@ -1,151 +1,487 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1"
-    />
-    <title>Hacker House Goa 2026 — Builder Card</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Imbue:wght@400;700&family=Victor+Mono:wght@400;600&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="style.css" />
-    <script
-      src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"
-      defer
-    ></script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.8.1/dist/vanilla-tilt.min.js"
-      defer
-    ></script>
-    <script
-      src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.js"
-      defer
-    ></script>
-  </head>
-  <body>
-    <main class="wrap">
-      <!-- STEP 1: form -->
-      <section id="formSection" class="card">
-        <div class="field">
-          <label for="photoInput"
-            ><i data-lucide="camera"></i> Your photo</label
-          >
-          <input type="file" id="photoInput" accept="image/*,.heic,.heif" />
-          <p class="hint" id="photoHint">
-            JPG, PNG, or iPhone HEIC. We'll auto-crop around your face.
-          </p>
-        </div>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HACKER HOUSE GOA — 28–31 Oct 2026</title>
+<meta name="description" content="Hacker House Goa. 28–31 Oct 2026. Builders, welcome to the shack." />
 
-        <div class="preview-wrap" id="previewWrap" hidden>
-          <canvas id="previewCanvas"></canvas>
-          <p class="hint" id="detectionStatus">Detecting face…</p>
-        </div>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;0,9..144,900;1,9..144,700;1,9..144,900&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-        <div class="field">
-          <label for="nameInput"><i data-lucide="user"></i> Name</label>
-          <input
-            type="text"
-            id="nameInput"
-            placeholder="Your name"
-            maxlength="60"
-          />
-        </div>
+<style>
+  :root{
+    --green-900:#0f3a25;
+    --green-800:#155534;
+    --green-700:#1a663d;
+    --green-chalk:#1c6a40;
+    --yellow:#f2c518;
+    --yellow-dim:#d9ae10;
+    --pink:#ec1c72;
+    --cream:#f3ecd8;
+    --ink:#0b2717;
+    --white-soft:#f6f4ea;
+    --line: rgba(243,236,216,0.16);
 
-        <div class="field">
-          <label for="roleInput"
-            ><i data-lucide="terminal"></i> Role / stack</label
-          >
-          <input
-            type="text"
-            id="roleInput"
-            placeholder="e.g. Frontend Developer"
-            maxlength="60"
-          />
-        </div>
+    --serif: 'Fraunces', serif;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
 
-        <button id="generateBtn" class="btn primary" disabled>
-          <i data-lucide="sparkles"></i> Generate my card
-        </button>
-        <p class="error" id="formError" hidden></p>
-      </section>
+    --max: 1280px;
+  }
 
-      <!-- STEP 2: result -->
-      <section id="resultSection" class="card" hidden>
-        <div class="badge-tilt">
-          <img id="resultImage" alt="Your generated Hacker House Goa card" />
-        </div>
-        <div class="actions">
-          <a id="downloadBtn" class="btn secondary" download
-            ><i data-lucide="download"></i> Download</a
-          >
-          <button id="shareBtn" class="btn primary">
-            <i data-lucide="share-2"></i> Share to X
-          </button>
-        </div>
-        <button id="startOverBtn" class="btn link">
-          <i data-lucide="rotate-ccw"></i> Make another
-        </button>
-      </section>
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--green-chalk);
+    color:var(--cream);
+    font-family: var(--sans);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
 
-      <!-- loading overlay -->
-      <div id="loadingOverlay" class="loading-overlay" hidden>
-        <div class="spinner"></div>
-        <p id="loadingText">Generating your card…</p>
+  /* chalkboard texture, shared everywhere the green shows */
+  .chalk{
+    position:relative;
+    background-color:var(--green-chalk);
+    background-image:
+      radial-gradient(ellipse 120% 80% at 20% -10%, rgba(255,255,255,0.05), transparent 60%),
+      radial-gradient(ellipse 100% 60% at 90% 110%, rgba(0,0,0,0.18), transparent 60%);
+  }
+  .chalk::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    opacity:0.6;
+    pointer-events:none;
+    mix-blend-mode:overlay;
+  }
+
+  a{color:inherit;}
+  img{max-width:100%; display:block;}
+  .max{max-width:var(--max); margin:0 auto; padding:0 28px;}
+
+  /* faint background glyphs — coder-on-a-chalkboard motif */
+  .glyphs span{
+    position:absolute;
+    font-family:var(--mono);
+    color:rgba(243,236,216,0.08);
+    font-weight:700;
+    user-select:none;
+    pointer-events:none;
+  }
+
+  /* ---------- NAV ---------- */
+  header{
+    position:sticky; top:0; z-index:50;
+    background:rgba(15,58,37,0.86);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 28px;
+    max-width:var(--max); margin:0 auto;
+  }
+  .logo{
+    display:flex; flex-direction:column; line-height:0.85;
+    font-family:var(--mono); font-weight:700; color:var(--yellow);
+    letter-spacing:0.5px;
+  }
+  .logo .time{font-size:26px; font-style:italic; letter-spacing:1px;}
+  .logo .time sup{font-size:13px; margin-left:2px;}
+  .logo .studio{font-size:12px; letter-spacing:5px; margin-top:4px;}
+
+  .nav-links{display:flex; align-items:center; gap:28px;}
+  .nav-links a.text-link{
+    font-family:var(--mono); font-size:13px; letter-spacing:1px;
+    text-transform:uppercase; text-decoration:none; color:var(--white-soft);
+    opacity:0.9; border-bottom:1px solid transparent; padding-bottom:2px;
+    transition:opacity .15s ease, border-color .15s ease;
+  }
+  .nav-links a.text-link:hover{opacity:1; border-color:var(--yellow);}
+
+  .btn-apply{
+    position:relative;
+    font-family:var(--serif); font-weight:900; font-style:italic;
+    font-size:16px; letter-spacing:0.5px; color:var(--green-900);
+    background:var(--yellow);
+    padding:10px 26px;
+    text-decoration:none;
+    display:inline-block;
+    border:2px solid var(--green-900);
+    box-shadow:3px 3px 0 var(--green-900);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn-apply::before{
+    content:"";
+    position:absolute; left:-2px; right:-2px; top:-8px; height:5px;
+    background-image: repeating-linear-gradient(45deg, var(--pink) 0 4px, var(--cream) 4px 8px);
+  }
+  .btn-apply:hover{ transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--green-900); }
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative;
+    padding:88px 0 56px;
+    overflow:hidden;
+  }
+  .hero-inner{max-width:var(--max); margin:0 auto; padding:0 28px; position:relative;}
+  .eyebrow{
+    font-family:var(--mono); font-size:13px; letter-spacing:4px;
+    color:var(--yellow); text-transform:uppercase; margin:0 0 18px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{content:"▌"; animation:blink 1.1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+
+  h1.headline{
+    margin:0; position:relative;
+    font-family:var(--serif);
+    font-weight:900;
+    font-style:italic;
+    color:var(--yellow);
+    text-transform:uppercase;
+    font-size:clamp(58px, 11vw, 172px);
+    line-height:0.86;
+    letter-spacing:-0.01em;
+    text-shadow:
+      3px 3px 0 rgba(11,39,23,0.55),
+      0 0 40px rgba(242,197,24,0.08);
+    -webkit-text-stroke: 1.5px rgba(11,39,23,0.5);
+  }
+  h1.headline .line2{display:block; text-align:right;}
+
+  .goa-sticker{
+    position:absolute;
+    left:50%; top:50%;
+    transform:translate(-50%,-46%) rotate(-6deg);
+    background:var(--pink);
+    color:var(--pink);
+    padding:14px 26px 18px;
+    border-radius:6px;
+    box-shadow:6px 6px 0 rgba(11,39,23,0.5);
+    z-index:5;
+  }
+  .goa-sticker span{
+    font-family:var(--serif); font-weight:900; font-style:italic;
+    font-size:clamp(28px, 4.2vw, 54px);
+    color:var(--cream);
+    -webkit-text-stroke:1.5px var(--pink);
+  }
+
+  .hero-meta{
+    display:flex; justify-content:space-between; align-items:baseline;
+    flex-wrap:wrap; gap:12px;
+    margin-top:30px;
+    padding-top:18px;
+    border-top:1px dashed var(--line);
+    font-family:var(--mono); letter-spacing:1.5px; font-size:14px;
+    color:var(--white-soft);
+    text-transform:uppercase;
+  }
+  .hero-meta .dot{color:var(--yellow); margin:0 10px;}
+
+  /* ---------- MARQUEE ---------- */
+  .marquee{
+    background:var(--yellow);
+    color:var(--green-900);
+    padding:12px 0;
+    overflow:hidden;
+    border-top:2px solid var(--green-900);
+    border-bottom:2px solid var(--green-900);
+  }
+  .marquee-track{
+    display:flex; width:max-content;
+    animation:scroll 26s linear infinite;
+  }
+  .marquee-track span{
+    font-family:var(--mono); font-weight:700; font-size:15px;
+    letter-spacing:2px; text-transform:uppercase;
+    padding:0 26px; white-space:nowrap;
+  }
+  .marquee-track span::after{content:"//"; margin-left:26px; opacity:0.5;}
+  @keyframes scroll{ from{transform:translateX(0);} to{transform:translateX(-50%);} }
+  @media (prefers-reduced-motion: reduce){ .marquee-track{animation:none;} }
+
+  /* ---------- SECTION shell ---------- */
+  section{padding:96px 0;}
+  .section-head{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    gap:24px; margin-bottom:48px; flex-wrap:wrap;
+  }
+  .kicker{
+    font-family:var(--mono); font-size:13px; letter-spacing:3px;
+    text-transform:uppercase; color:var(--yellow); margin:0 0 10px;
+  }
+  h2{
+    font-family:var(--serif); font-weight:900; font-style:italic;
+    font-size:clamp(34px, 5vw, 58px); margin:0; color:var(--cream);
+  }
+  .section-sub{
+    max-width:360px; font-family:var(--sans); font-size:15px;
+    color:rgba(243,236,216,0.72); line-height:1.5;
+  }
+
+  /* ---------- BUILDER CARD ---------- */
+  .card-section{
+    background:var(--yellow);
+    color:var(--green-900);
+    position:relative;
+  }
+  .card-section .kicker{color:var(--pink);}
+  .card-section h2{color:var(--green-900);}
+  .card-section .section-sub{color:rgba(11,39,23,0.7);}
+  .card-grid{
+    display:grid; grid-template-columns: 0.9fr 1.1fr; gap:56px; align-items:center;
+  }
+  .id-card{
+    background:var(--cream);
+    border:3px solid var(--green-900);
+    border-radius:16px;
+    padding:26px;
+    box-shadow:10px 10px 0 var(--green-900);
+    max-width:360px;
+    font-family:var(--mono);
+  }
+  .id-card .id-head{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--pink); margin-bottom:16px; font-weight:700;
+  }
+  .id-photo{
+    width:100%; aspect-ratio:1/1; border-radius:50%;
+    background:
+      radial-gradient(circle at 35% 30%, rgba(11,39,23,0.15), transparent 60%),
+      repeating-linear-gradient(135deg, rgba(11,39,23,0.08) 0 10px, transparent 10px 20px),
+      var(--green-chalk);
+    border:3px solid var(--green-900);
+    margin:0 auto 18px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--yellow); font-size:13px; text-align:center; padding:20px;
+  }
+  .id-card .id-name{font-family:var(--serif); font-style:italic; font-weight:900; font-size:26px; color:var(--ink);}
+  .id-card .id-role{font-size:13px; color:var(--pink); margin-top:4px; text-transform:uppercase; letter-spacing:1px;}
+  .id-card .id-foot{
+    margin-top:20px; padding-top:14px; border-top:1px dashed rgba(11,39,23,0.3);
+    display:flex; justify-content:space-between; font-size:11px; letter-spacing:1px; color:rgba(11,39,23,0.6);
+  }
+
+  .card-copy p{font-size:17px; line-height:1.65; margin:0 0 18px; max-width:480px;}
+  .card-copy ol{
+    list-style:none; counter-reset:steps; margin:0 0 30px; padding:0;
+  }
+  .card-copy ol li{
+    counter-increment:steps;
+    display:flex; gap:14px; padding:10px 0;
+    font-family:var(--mono); font-size:14px;
+  }
+  .card-copy ol li::before{
+    content:counter(steps,decimal-leading-zero);
+    font-weight:700; color:var(--pink);
+  }
+  .btn-dark{
+    display:inline-flex; align-items:center; gap:10px;
+    font-family:var(--serif); font-weight:900; font-style:italic; font-size:17px;
+    background:var(--green-900); color:var(--yellow);
+    padding:14px 30px; text-decoration:none;
+    border:2px solid var(--green-900);
+    box-shadow:4px 4px 0 rgba(11,39,23,0.4);
+    transition:transform .15s ease;
+  }
+  .btn-dark:hover{transform:translate(-2px,-2px);}
+
+  /* ---------- APPLY CTA ---------- */
+  .cta{
+    text-align:center; padding:140px 0;
+    position:relative;
+  }
+  .cta h2{
+    font-size:clamp(40px, 7vw, 96px);
+    color:var(--yellow);
+    -webkit-text-stroke: 1.2px rgba(11,39,23,0.5);
+    text-shadow:3px 3px 0 rgba(11,39,23,0.5);
+  }
+  .cta .section-sub{margin:0 auto 34px; text-align:center; max-width:460px;}
+  .cta-btn{
+    font-family:var(--serif); font-weight:900; font-style:italic;
+    font-size:22px; color:var(--green-900); background:var(--yellow);
+    padding:18px 48px; text-decoration:none; display:inline-block;
+    border:2px solid var(--ink);
+    box-shadow:6px 6px 0 var(--ink);
+    transition:transform .15s ease, box-shadow .15s ease;
+    position:relative;
+  }
+  .cta-btn:hover{ transform:translate(-3px,-3px); box-shadow:9px 9px 0 var(--ink); }
+  .cta-note{
+    margin-top:18px; font-family:var(--mono); font-size:12px; letter-spacing:1.5px;
+    color:rgba(243,236,216,0.55); text-transform:uppercase;
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer{
+    background:var(--green-900);
+    border-top:1px solid var(--line);
+    padding:48px 0 28px;
+  }
+  .foot-top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    flex-wrap:wrap; gap:32px; padding-bottom:32px; border-bottom:1px solid var(--line);
+  }
+  .foot-links{display:flex; gap:36px; flex-wrap:wrap;}
+  .foot-col h4{
+    font-family:var(--mono); font-size:12px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--yellow); margin:0 0 12px;
+  }
+  .foot-col a{
+    display:block; font-family:var(--sans); font-size:14px; color:var(--white-soft);
+    text-decoration:none; opacity:0.8; margin-bottom:8px;
+  }
+  .foot-col a:hover{opacity:1; color:var(--yellow);}
+  .foot-bottom{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+    padding-top:22px; font-family:var(--mono); font-size:12px; letter-spacing:1px;
+    color:rgba(243,236,216,0.5); text-transform:uppercase;
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 860px){
+    .card-grid{grid-template-columns:1fr; gap:36px;}
+    .nav-links .text-link{display:none;}
+    h1.headline .line2{text-align:left;}
+    .goa-sticker{position:static; transform:rotate(-4deg); display:inline-block; margin:14px 0;}
+  }
+</style>
+</head>
+<body>
+
+<!-- background terminal glyphs -->
+<div class="glyphs" aria-hidden="true">
+  <span style="left:4%; top:14%; font-size:52px; transform:rotate(-8deg);">&lt;/&gt;</span>
+  <span style="right:6%; top:30%; font-size:64px; transform:rotate(6deg);">{ }</span>
+  <span style="left:8%; bottom:8%; font-size:40px;">$_</span>
+  <span style="right:10%; bottom:14%; font-size:46px; transform:rotate(-4deg);">01</span>
+</div>
+
+<header>
+  <div class="nav">
+    <a href="#top" class="logo" aria-label="2:47 PM Studio home">
+      <span class="time">2:47<sup>PM</sup></span>
+      <span class="studio">STUDIO</span>
+    </a>
+    <nav class="nav-links">
+      <a class="text-link" href="#builder-card">Builder Card</a>
+      <a class="text-link" href="#hype">Check Hype</a>
+      <a class="btn-apply" href="#apply">Apply</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero chalk">
+    <div class="hero-inner">
+      <p class="eyebrow">shortlisting is open</p>
+      <h1 class="headline">
+        Hacker
+        <span class="line2">House</span>
+      </h1>
+      <div class="goa-sticker" aria-hidden="true"><span>गोवा</span></div>
+
+      <div class="hero-meta">
+        <span>Goa, India <span class="dot">·</span> 28 – 31 Oct 2026</span>
+        <span>2:47 PM Studio</span>
       </div>
-    </main>
+    </div>
+  </section>
 
-    <!-- face-api.js (browser IIFE build, bundles TF.js, exposes global `faceapi`) -->
-    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-    <!-- heic-to (actively maintained HEIC/HEIF -> JPEG converter, exposes global `HeicTo`) -->
-    <script src="https://cdn.jsdelivr.net/npm/heic-to@1.5.2/dist/iife/heic-to.js"></script>
-    <script src="app.js"></script>
+  <div class="marquee" id="hype" aria-hidden="true">
+    <div class="marquee-track">
+      <span>Builders</span><span>Hackers</span><span>Designers</span><span>Terminal Wizards</span><span>Shipping in public</span>
+      <span>Builders</span><span>Hackers</span><span>Designers</span><span>Terminal Wizards</span><span>Shipping in public</span>
+    </div>
+  </div>
 
-    <!-- decorative flourishes: icons, confetti burst, and a tilting badge on reveal -->
-    <script defer>
-      document.addEventListener("DOMContentLoaded", () => {
-        if (window.lucide) lucide.createIcons();
+  <!-- BUILDER CARD -->
+  <section class="card-section chalk" id="builder-card" style="--line: rgba(11,39,23,0.2);">
+    <div class="max">
+      <div class="section-head">
+        <div>
+          <p class="kicker">Once you're in</p>
+          <h2>Get your Builder ID.</h2>
+        </div>
+        <p class="section-sub">Every accepted builder gets a card that's actually theirs — photo, name, and a title we made up based on your stack.</p>
+      </div>
 
-        const resultSection = document.getElementById("resultSection");
-        const badge = document.querySelector(".badge-tilt");
-        const prefersReducedMotion = window.matchMedia(
-          "(prefers-reduced-motion: reduce)",
-        ).matches;
+      <div class="card-grid">
+        <div class="id-card">
+          <div class="id-head"><span>HH GOA · 2026</span><span>#0247</span></div>
+          <div class="id-photo">your<br>photo<br>goes here</div>
+          <div class="id-name">A. Fernandes</div>
+          <div class="id-role">Terminal Wizard · Full-Stack</div>
+          <div class="id-foot"><span>GOA, IN</span><span>28–31 OCT</span></div>
+        </div>
 
-        if (badge && window.VanillaTilt) {
-          VanillaTilt.init(badge, {
-            max: 12,
-            speed: 400,
-            glare: true,
-            "max-glare": 0.25,
-            scale: 1.02,
-          });
-        }
+        <div class="card-copy">
+          <p>Upload one photo, tell us your name and what you build. We auto-crop, drop you into the card, and hand back a real PNG you can post — with your title pulled from your stack, not a template.</p>
+          <ol>
+            <li>Upload a JPG, PNG, or straight-off-the-iPhone HEIC.</li>
+            <li>Add your name and your role or stack.</li>
+            <li>Download your card, or share it straight to X with one tap.</li>
+          </ol>
+          <a class="btn-dark" href="https://builder-card-generator.vercel.app/" target="_blank" rel="noopener">Generate my card →</a>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        if (resultSection) {
-          const observer = new MutationObserver(() => {
-            if (!resultSection.hasAttribute("hidden")) {
-              if (window.confetti && !prefersReducedMotion) {
-                confetti({
-                  particleCount: 90,
-                  spread: 75,
-                  startVelocity: 45,
-                  origin: { y: 0.6 },
-                  colors: ["#fee101", "#ff0080", "#ffffff"],
-                });
-              }
-            }
-          });
-          observer.observe(resultSection, {
-            attributes: true,
-            attributeFilter: ["hidden"],
-          });
-        }
-      });
-    </script>
-  </body>
+  <!-- APPLY CTA -->
+  <section class="cta chalk" id="apply">
+    <div class="max">
+      <p class="kicker">Applications close soon</p>
+      <h2>Come build<br>in the shack.</h2>
+      <p class="section-sub">Forty spots. One house. Four days to ship the thing you keep saying you'll get to.</p>
+      <a class="cta-btn" href="mailto:apply@hhgoa.com?subject=Hacker%20House%20Goa%20Application">Apply now</a>
+      <div class="cta-note">Rolling admissions · Goa, India · 28–31 Oct 2026</div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="max">
+    <div class="foot-top">
+      <a href="#top" class="logo" aria-label="2:47 PM Studio">
+        <span class="time" style="font-size:22px;">2:47<sup>PM</sup></span>
+        <span class="studio" style="font-size:11px;">STUDIO</span>
+      </a>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h4>Event</h4>
+          <a href="#builder-card">Builder Card</a>
+          <a href="#apply">Apply</a>
+        </div>
+        <div class="foot-col">
+          <h4>Builder Card</h4>
+          <a href="https://builder-card-generator.vercel.app/" target="_blank" rel="noopener">Generate a card</a>
+          <a href="https://github.com/Aaryan13-hub/Builder_card_generator" target="_blank" rel="noopener">View the repo</a>
+        </div>
+        <div class="foot-col">
+          <h4>Say hi</h4>
+          <a href="mailto:hello@hhgoa.com">hello@hhgoa.com</a>
+          <a href="#hype">Check the hype</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Hacker House Goa</span>
+      <span>Built by 2:47 PM Studio</span>
+    </div>
+  </div>
+</footer>
+
+</body>
 </html>

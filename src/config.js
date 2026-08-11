@@ -43,6 +43,8 @@ module.exports = {
 
   TEXT: {
     hashtag: { x: 540, y: 335, font: '600 30px "RobotoRegular"', color: '#E040C0', text: '#FRAMEINGOA' },
+    // Short quote line used in the header band
+    quote: { font: 'italic 20px "Georgia"', color: '#F2C744' },
     // Card zone geometry — detected from templates/card_template.jpg
     // (template-work/find_dividers.js): two divider lines inside the
     // cream card at y=928 and y=1019. Title+name live above the first
@@ -51,7 +53,9 @@ module.exports = {
     // Cream card zone in card_template2.png — spans from y≈756 to y≈1080,
     // x from ~148 to ~940. Two baked-in divider lines sit at approx y=937 and y=1030.
     cardLeft: 148,
+    cardTop: 756,
     cardWidth: 792,
+    cardHeight: 324,
     divider1Y: 937,
     divider2Y: 1030,
     // Text colours match the reference design: dark forest-green on cream for

@@ -1,325 +1,164 @@
-// ---- Config ----------------------------------------------------------
-const FACE_MODEL_URL =
-  "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
-const DETECTION_MAX_DIM = 640; // downscale for fast client-side detection; fractions stay resolution-independent
-const API_BASE = ""; // same-origin (server also serves this static site)
-const SHARE_POST_TEXT =
-  "Built my HH Goa 2026 frame and I’m feeling the builder energy. Come join the vibe! #FrameInGoa #HHGoa";
+﻿document.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById('particle-glow');
+  const frame = canvas?.parentElement;
+  const artWrap = document.querySelector('.headline-art-wrap');
+  const divider = document.querySelector('.hero-divider');
+  if (!canvas || !frame || !artWrap || !divider) return;
 
-// ---- DOM refs ----------------------------------------------------------
-const photoInput = document.getElementById("photoInput");
-const previewWrap = document.getElementById("previewWrap");
-const previewCanvas = document.getElementById("previewCanvas");
-const detectionStatus = document.getElementById("detectionStatus");
-const nameInput = document.getElementById("nameInput");
-const roleInput = document.getElementById("roleInput");
-const generateBtn = document.getElementById("generateBtn");
-const formError = document.getElementById("formError");
-const formSection = document.getElementById("formSection");
-const resultSection = document.getElementById("resultSection");
-const resultImage = document.getElementById("resultImage");
-const downloadBtn = document.getElementById("downloadBtn");
-const shareBtn = document.getElementById("shareBtn");
-const startOverBtn = document.getElementById("startOverBtn");
-const loadingOverlay = document.getElementById("loadingOverlay");
-const loadingText = document.getElementById("loadingText");
+  const ctx = canvas.getContext('2d');
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const colors = ['#f5d90a', '#f0338a'];
+  const particleCount = 100;
+  let particles = [];
+  let animationId = null;
+  let isVisible = true;
+  let frameSize = { width: 0, height: 0 };
+  let lastTime = performance.now();
 
-// ---- State ---------------------------------------------------------------
-let uploadBlob = null; // the actual file/blob we send to the backend (HEIC already converted to JPEG if needed)
-let uploadFilename = "photo.jpg";
-let faceBoxFraction = null; // { x, y, width, height } as 0..1 fractions, or null if detection failed
-let lastGeneratedResult = null; // { imageUrl, downloadUrl, sharePageUrl, shareIntentUrl }
-
-// ---- Model loading (kicks off immediately, awaited later) ---------------
-const modelsReadyPromise = (async () => {
-  try {
-    await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL);
-    return true;
-  } catch (err) {
-    console.error("Failed to load face detection model:", err);
-    return false; // detection will be skipped, fallback crop used server-side
-  }
-})();
-
-// ---- Helpers ---------------------------------------------------------------
-function showError(msg) {
-  formError.textContent = msg;
-  formError.hidden = false;
-}
-function clearError() {
-  formError.hidden = true;
-  formError.textContent = "";
-}
-function setLoading(isLoading, text) {
-  loadingOverlay.hidden = !isLoading;
-  if (text) loadingText.textContent = text;
-}
-function updateGenerateEnabled() {
-  generateBtn.disabled = !(
-    uploadBlob &&
-    nameInput.value.trim() &&
-    roleInput.value.trim()
-  );
-}
-
-function buildShareIntentUrl(sharePageUrl) {
-  const params = new URLSearchParams({ text: SHARE_POST_TEXT, url: sharePageUrl });
-  return `https://twitter.com/intent/tweet?${params.toString()}`;
-}
-
-async function isHeicFile(file) {
-  try {
-    if (window.HeicTo && typeof HeicTo.isHeic === "function") {
-      return await HeicTo.isHeic(file);
-    }
-  } catch {
-    /* fall through to extension check */
-  }
-  return /\.(heic|heif)$/i.test(file.name);
-}
-
-/**
- * Loads a File/Blob into an HTMLImageElement, resolving once decoded.
- */
-function loadImageFromBlob(blob) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => resolve({ img, url });
-    img.onerror = (e) => {
-      URL.revokeObjectURL(url);
-      reject(e);
-    };
-    img.src = url;
+  const createParticle = () => ({
+    baseX: Math.random(),
+    baseY: 0.45 + Math.random() * 0.35,
+    orbit: 16 + Math.random() * 18,
+    angle: Math.random() * Math.PI * 2,
+    angularSpeed: 0.00008 + Math.random() * 0.00012,
+    radius: 1.5 + Math.random() * 3.5,
+    phase: Math.random() * Math.PI * 2,
+    color: colors[Math.random() < 0.45 ? 0 : 1],
+    opacity: 0.2 + Math.random() * 0.5,
   });
-}
 
-/**
- * Draws the image onto a downscaled canvas (max DETECTION_MAX_DIM on the
- * longer side) — fast for both on-screen preview and face detection.
- * Fractional coordinates computed against this canvas remain valid at any
- * resolution since they're proportions, not pixels.
- */
-function drawScaledToCanvas(img, canvas) {
-  const scale = Math.min(
-    1,
-    DETECTION_MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight),
-  );
-  const w = Math.round(img.naturalWidth * scale);
-  const h = Math.round(img.naturalHeight * scale);
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, w, h);
-  return { w, h };
-}
+  const initParticles = () => {
+    particles = Array.from({ length: particleCount }, createParticle);
+  };
 
-function drawFaceOverlay(canvas, box) {
-  const ctx = canvas.getContext("2d");
-  ctx.save();
-  ctx.strokeStyle = "#fee101"; // brand primary yellow (Hackers House Goa theme)
-  ctx.lineWidth = 3;
-  ctx.strokeRect(box.x, box.y, box.width, box.height);
-  ctx.restore();
-}
+  const resizeCanvas = () => {
+    const frameBounds = frame.getBoundingClientRect();
+    const artBounds = artWrap.getBoundingClientRect();
+    const dividerBounds = divider.getBoundingClientRect();
+    const top = Math.max(0, artBounds.bottom - frameBounds.top);
+    const bottom = Math.max(top + 1, dividerBounds.top - frameBounds.top);
+    const height = Math.max(1, bottom - top);
+    const width = Math.max(1, frameBounds.width);
 
-// ---- Photo selection: convert HEIC if needed, detect face, preview ------
-photoInput.addEventListener("change", async () => {
-  clearError();
-  const file = photoInput.files[0];
-  if (!file) return;
+    canvas.style.position = 'absolute';
+    canvas.style.left = '0px';
+    canvas.style.top = `${top}px`;
+    canvas.style.height = `${height}px`;
+    canvas.style.width = `${width}px`;
+    canvas.width = Math.floor(width * window.devicePixelRatio);
+    canvas.height = Math.floor(height * window.devicePixelRatio);
+    ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
 
-  previewWrap.hidden = false;
-  detectionStatus.textContent = "Preparing photo…";
-  uploadBlob = null;
-  faceBoxFraction = null;
-  updateGenerateEnabled();
+    frameSize = { width, height };
+  };
 
-  try {
-    // 1. HEIC/HEIF -> JPEG conversion (most browsers can't decode HEIC in <canvas>)
-    let workingBlob = file;
-    uploadFilename = file.name || "photo.jpg";
+  const resetParticle = (particle) => {
+    Object.assign(particle, createParticle());
+  };
 
-    if (await isHeicFile(file)) {
-      detectionStatus.textContent = "Converting HEIC photo…";
-      const converted = await HeicTo.heicTo({
-        blob: file,
-        type: "image/jpeg",
-        quality: 0.92,
-      });
-      workingBlob = Array.isArray(converted) ? converted[0] : converted;
-      uploadFilename = uploadFilename.replace(/\.(heic|heif)$/i, ".jpg");
-    }
-
-    uploadBlob = workingBlob;
-
-    // 2. Decode into an <img>, draw scaled preview
-    const { img, url } = await loadImageFromBlob(workingBlob);
-    const { w, h } = drawScaledToCanvas(img, previewCanvas);
-    URL.revokeObjectURL(url);
-
-    // 3. Face detection (client-side, so results are near-instant and the
-    //    server never has to run a model per request)
-    detectionStatus.textContent = "Detecting face…";
-    const modelsReady = await modelsReadyPromise;
-
-    if (modelsReady) {
-      const detection = await faceapi.detectSingleFace(
-        previewCanvas,
-        new faceapi.TinyFaceDetectorOptions({
-          inputSize: 320,
-          scoreThreshold: 0.5,
-        }),
-      );
-
-      if (detection) {
-        const box = detection.box;
-        faceBoxFraction = {
-          x: box.x / w,
-          y: box.y / h,
-          width: box.width / w,
-          height: box.height / h,
-        };
-        // Note: we intentionally do NOT draw the bounding box on the preview —
-        // face detection still works and the faceBox is sent to the server for
-        // accurate center-cropping, but the yellow square is hidden from the user.
-        detectionStatus.textContent =
-          "Face detected — your photo will be perfectly centered.";
-      } else {
-        faceBoxFraction = null;
-        detectionStatus.textContent =
-          "Couldn't auto-detect a face — we'll auto-center your photo instead.";
-      }
-    } else {
-      faceBoxFraction = null;
-      detectionStatus.textContent =
-        "Face detection unavailable — we'll auto-center your photo instead.";
-    }
-  } catch (err) {
-    console.error(err);
-    uploadBlob = null;
-    showError(
-      "Could not read that photo. Try a different file (JPG, PNG, or HEIC).",
-    );
-    previewWrap.hidden = true;
-  }
-
-  updateGenerateEnabled();
-});
-
-nameInput.addEventListener("input", updateGenerateEnabled);
-roleInput.addEventListener("input", updateGenerateEnabled);
-
-// ---- Generate ---------------------------------------------------------------
-generateBtn.addEventListener("click", async () => {
-  clearError();
-  if (!uploadBlob) return showError("Please choose a photo first.");
-  const name = nameInput.value.trim();
-  const role = roleInput.value.trim();
-  if (!name) return showError("Please enter your name.");
-  if (!role) return showError("Please enter your role/stack.");
-
-  setLoading(true, "Generating your card…");
-
-  try {
-    const formData = new FormData();
-    formData.append("photo", uploadBlob, uploadFilename);
-    formData.append("name", name);
-    formData.append("role", role);
-    if (faceBoxFraction) {
-      formData.append("faceBox", JSON.stringify(faceBoxFraction));
-    }
-
-    const res = await fetch(`${API_BASE}/api/generate`, {
-      method: "POST",
-      body: formData,
+  const updateParticles = (dt) => {
+    particles.forEach((particle) => {
+      particle.angle += particle.angularSpeed * dt;
+      particle.phase += 0.002 * dt;
     });
-    const data = await res.json();
+  };
 
-    if (!res.ok) {
-      throw new Error(
-        data.error || "Something went wrong generating your card.",
-      );
+  const drawParticles = () => {
+    ctx.clearRect(0, 0, frameSize.width, frameSize.height);
+
+    particles.forEach((particle) => {
+      const x = particle.baseX * frameSize.width + Math.cos(particle.angle) * particle.orbit;
+      const y = particle.baseY * frameSize.height + Math.sin(particle.angle) * (particle.orbit * 0.45);
+      const alpha = particle.opacity * (0.6 + 0.4 * Math.cos(particle.angle * 0.7));
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = particle.radius * 6;
+      ctx.fillStyle = particle.color;
+      ctx.beginPath();
+      ctx.arc(x, y, particle.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  };
+
+  const renderStaticFrame = () => {
+    resizeCanvas();
+    if (!frameSize.width || !frameSize.height) return;
+    ctx.clearRect(0, 0, frameSize.width, frameSize.height);
+    particles.forEach((particle, index) => {
+      // place static orbits evenly
+      particle.angle = particle.angle || Math.random() * Math.PI * 2;
+      particle.opacity = 0.28 + (index % 10) * 0.01;
+      const x = particle.baseX * frameSize.width + Math.cos(particle.angle) * particle.orbit;
+      const y = particle.baseY * frameSize.height + Math.sin(particle.angle) * (particle.orbit * 0.45);
+      ctx.save();
+      ctx.globalAlpha = particle.opacity;
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = particle.radius * 5;
+      ctx.fillStyle = particle.color;
+      ctx.beginPath();
+      ctx.arc(x, y, particle.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  };
+
+  const animate = (time) => {
+    if (!isVisible) {
+      animationId = null;
+      return;
     }
+    const delta = time - lastTime;
+    lastTime = time;
+    resizeCanvas();
+    updateParticles(delta);
+    drawParticles();
+    animationId = requestAnimationFrame(animate);
+  };
 
-    lastGeneratedResult = data;
-    resultImage.src = data.imageUrl;
-    downloadBtn.href = data.downloadUrl;
-    downloadBtn.setAttribute("download", `hh-goa-2026-${data.id}.png`);
+  const startAnimation = () => {
+    if (animationId || prefersReducedMotion.matches || !isVisible) return;
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(animate);
+  };
 
-    formSection.hidden = true;
-    resultSection.hidden = false;
-  } catch (err) {
-    console.error(err);
-    showError(err.message || "Could not generate your card. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-});
+  const stopAnimation = () => {
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = null;
+  };
 
-// ---- Share to X ---------------------------------------------------------------
-shareBtn.addEventListener("click", async () => {
-  if (!lastGeneratedResult) return;
-  const { imageUrl, sharePageUrl, shareIntentUrl } = lastGeneratedResult;
-  const shareText = SHARE_POST_TEXT;
-  const fallbackIntentUrl =
-    shareIntentUrl ||
-    buildShareIntentUrl(
-      sharePageUrl || `${window.location.origin}${window.location.pathname}`,
-    );
+  const observer = new IntersectionObserver((entries) => {
+    isVisible = entries.some((entry) => entry.isIntersecting);
+    if (prefersReducedMotion.matches) {
+      renderStaticFrame();
+      return;
+    }
+    if (isVisible) startAnimation();
+    else stopAnimation();
+  }, { threshold: 0.1 });
 
-  // Open a placeholder tab synchronously so popup blockers don't block
-  // fallback navigation after async share checks.
-  let fallbackTab = null;
-  try {
-    fallbackTab = window.open("", "_blank");
-  } catch (err) {
-    fallbackTab = null;
-  }
+  initParticles();
+  resizeCanvas();
 
-  // Prefer native share sheet with the actual image attached (best on mobile)
-  try {
-    if (navigator.canShare) {
-      const resp = await fetch(imageUrl);
-      const blob = await resp.blob();
-      const file = new File([blob], "hh-goa-2026-card.png", {
-        type: "image/png",
-      });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          text: shareText,
-          url: sharePageUrl,
-        });
-        if (fallbackTab && !fallbackTab.closed) fallbackTab.close();
-        return;
+  if (prefersReducedMotion.matches) renderStaticFrame();
+  else startAnimation();
+
+  observer.observe(canvas);
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    if (prefersReducedMotion.matches) renderStaticFrame();
+  });
+
+  if (prefersReducedMotion.addEventListener) {
+    prefersReducedMotion.addEventListener('change', () => {
+      if (prefersReducedMotion.matches) {
+        stopAnimation();
+        renderStaticFrame();
+      } else {
+        startAnimation();
       }
-    }
-  } catch (err) {
-    // user cancelled share sheet, or share failed — fall through to link intent
-    if (err && err.name === "AbortError") return;
-    console.warn("Native share failed, falling back to link intent:", err);
+    });
   }
-
-  // Fallback: open a pre-filled X/Twitter intent with the share-page link
-  // (its OG image is the real generated card, not a blank thumbnail)
-  if (fallbackTab && !fallbackTab.closed) {
-    fallbackTab.location.href = fallbackIntentUrl;
-    return;
-  }
-  window.location.href = fallbackIntentUrl;
-});
-
-// ---- Start over ---------------------------------------------------------------
-startOverBtn.addEventListener("click", () => {
-  uploadBlob = null;
-  faceBoxFraction = null;
-  lastGeneratedResult = null;
-  photoInput.value = "";
-  nameInput.value = "";
-  roleInput.value = "";
-  previewWrap.hidden = true;
-  formSection.hidden = false;
-  resultSection.hidden = true;
-  updateGenerateEnabled();
 });
