@@ -129,6 +129,13 @@ photoInput.addEventListener("change", async () => {
   const file = photoInput.files[0];
   if (!file) return;
 
+  // ---- Profile Frame mode: client-side compositing ----
+  if (currentMode === 'frame') {
+    handleFramePhotoUpload(file);
+    return;
+  }
+
+  // ---- Builder ID mode (existing behavior, unchanged) ----
   previewWrap.hidden = false;
   detectionStatus.textContent = "Preparing photo…";
   uploadBlob = null;
@@ -212,6 +219,7 @@ roleInput.addEventListener("input", updateGenerateEnabled);
 
 // ---- Generate ---------------------------------------------------------------
 generateBtn.addEventListener("click", async () => {
+  if (currentMode === 'frame') return; // safety: frame mode has no Generate step
   clearError();
   if (!uploadBlob) return showError("Please choose a photo first.");
   const name = nameInput.value.trim();
@@ -368,3 +376,493 @@ startOverBtn.addEventListener("click", () => {
   resultSection.hidden = true;
   updateGenerateEnabled();
 });
+
+// ==============================================================
+// PROFILE FRAME MODE — Client-side canvas compositing
+// This section is completely independent of the Builder ID flow.
+// ==============================================================
+
+// ---- Frame DOM refs ----
+const modeBtnBuilder = document.getElementById('modeBtnBuilder');
+const modeBtnFrame = document.getElementById('modeBtnFrame');
+const framePreviewWrap = document.getElementById('framePreviewWrap');
+const frameCanvas = document.getElementById('frameCanvas');
+const frameCtx = frameCanvas.getContext('2d');
+const frameControls = document.getElementById('frameControls');
+const frameZoomSlider = document.getElementById('frameZoomSlider');
+const frameResetBtn = document.getElementById('frameResetBtn');
+const frameActions = document.getElementById('frameActions');
+const frameDownloadBtn = document.getElementById('frameDownloadBtn');
+const frameShareBtn = document.getElementById('frameShareBtn');
+const frameStartOverBtn = document.getElementById('frameStartOverBtn');
+const builderOnlySection = document.getElementById('builderOnlySection');
+const photoHint = document.getElementById('photoHint');
+
+// ---- Frame State ----
+let currentMode = 'builder'; // 'builder' | 'frame'
+let frameUploadedImage = null; // HTMLImageElement of user's uploaded photo
+let frameTemplateImage = null; // HTMLImageElement of the loaded template PNG
+let frameObjectUrl = null;     // tracked for memory cleanup
+let framePhotoOffsetX = 0;
+let framePhotoOffsetY = 0;
+let framePhotoScale = 1;
+let frameDragging = false;
+let frameDragStartX = 0;
+let frameDragStartY = 0;
+let frameOffsetStartX = 0;
+let frameOffsetStartY = 0;
+
+// ---- Frame Template Config ----
+const FRAME_TEMPLATE = {
+  src: '/HHGOA.png',
+  width: 1080,
+  height: 1350,
+  photo: { centerX: 554, centerY: 564, radius: 177 }
+};
+
+const FRAME_TEXT = {
+  title: { y: 820, font: 'italic bold 26px "Roboto"', color: '#2B4A14' },
+  name:  { yStart: 905, font: 'bold 54px "Roboto"', color: '#1C3A0E', lineHeight: 62 },
+  role:  { y: 1010, font: 'bold 48px "Roboto"', color: '#C8960A' },
+  maxTextWidth: 692, // 792 (card width) minus 100px padding
+};
+
+// ---- Client-side Builder Title (mirrors src/builderTitles.js) ----
+const FRAME_ROLE_TITLES = {
+  frontend: ['Terminal Wizard', 'Pixel Whisperer', 'CSS Sorcerer', 'DOM Tamer'],
+  backend:  ['Latency Slayer', 'Query Whisperer', 'Server Shaman', 'Byte Herder'],
+  fullstack: ['Stack Overlord', 'End-to-End Enigma', 'Full Stack Nomad'],
+  design:   ['Pixel Perfectionist', 'Vibe Architect', 'Figma Alchemist'],
+  ml:       ['Gradient Descender', 'Tensor Tamer', 'Model Whisperer'],
+  data:     ['Data Druid', 'Pipeline Sorcerer', 'Query Ninja'],
+  product:  ['Roadmap Rogue', 'Scope Shepherd', 'Feature Forger'],
+  founder:  ['Chaos Coordinator', 'Vision Vagabond', 'Founder Mode: On'],
+  devops:   ['Uptime Guardian', 'Container Whisperer', 'Deploy Druid'],
+};
+const FRAME_GENERIC_TITLES = [
+  'Terminal Wizard', 'Bug Whisperer', 'Ship-It Specialist', 'Midnight Committer',
+  'Chaos Engineer', 'Prod Firefighter', 'Merge Conflict Survivor', 'Builder Extraordinaire',
+];
+
+function frameHashString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+function frameGenerateBuilderTitle(role, seed) {
+  const normalized = role.toLowerCase();
+  const matchKey = Object.keys(FRAME_ROLE_TITLES).find(k => normalized.includes(k));
+  if (matchKey) {
+    const arr = FRAME_ROLE_TITLES[matchKey];
+    return arr[seed != null ? seed % arr.length : Math.floor(Math.random() * arr.length)];
+  }
+  return FRAME_GENERIC_TITLES[seed != null ? seed % FRAME_GENERIC_TITLES.length : Math.floor(Math.random() * FRAME_GENERIC_TITLES.length)];
+}
+
+function frameWrapText(ctx, text, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+// ---- Frame Template Loading (runs immediately, awaited before first render) ----
+const frameReadyPromise = (async () => {
+  try {
+    await document.fonts.ready;
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = FRAME_TEMPLATE.src;
+    });
+    frameTemplateImage = img;
+    return true;
+  } catch (err) {
+    console.error('Failed to load frame template:', err);
+    return false;
+  }
+})();
+
+// ---- Frame Rendering (synchronous — template + fonts guaranteed loaded before first call) ----
+function renderFrameCard() {
+  if (!frameTemplateImage) return;
+
+  const canvas = frameCanvas;
+  const ctx = frameCtx;
+  const { centerX, centerY, radius } = FRAME_TEMPLATE.photo;
+
+  // 1. Clear and fill with white (prevents transparent/black holes in download)
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 2. Draw user photo clipped to the circular area
+  if (frameUploadedImage) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+
+    const img = frameUploadedImage;
+    const imgW = img.naturalWidth;
+    const imgH = img.naturalHeight;
+    const diameter = radius * 2;
+
+    // Cover behavior: scale to completely fill the circle, crop excess
+    const imgAspect = imgW / imgH;
+    let drawW, drawH;
+    if (imgAspect > 1) {
+      // Landscape photo: height fills diameter, width overflows
+      drawH = diameter;
+      drawW = diameter * imgAspect;
+    } else {
+      // Portrait or square: width fills diameter, height overflows
+      drawW = diameter;
+      drawH = diameter / imgAspect;
+    }
+
+    // Apply user zoom
+    drawW *= framePhotoScale;
+    drawH *= framePhotoScale;
+
+    // Center in circle + apply user offset
+    const drawX = centerX - drawW / 2 + framePhotoOffsetX;
+    const drawY = centerY - drawH / 2 + framePhotoOffsetY;
+
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+    ctx.restore();
+  }
+
+  // 3. Draw template on top (transparent hole reveals photo underneath)
+  ctx.drawImage(frameTemplateImage, 0, 0, canvas.width, canvas.height);
+
+  // 4. Draw text (builder title, name, role)
+  const name = nameInput.value.trim();
+  const role = roleInput.value.trim();
+  const cardCenterX = canvas.width / 2;
+  ctx.textAlign = 'center';
+
+  // Builder title (only when both name and role are filled)
+  if (name && role) {
+    const seed = frameHashString(name.toLowerCase() + role.toLowerCase());
+    const builderTitle = frameGenerateBuilderTitle(role, seed);
+    ctx.font = FRAME_TEXT.title.font;
+    ctx.fillStyle = FRAME_TEXT.title.color;
+    ctx.fillText('\u2726 ' + builderTitle.toUpperCase() + ' \u2726', cardCenterX, FRAME_TEXT.title.y);
+  }
+
+  // Name
+  if (name) {
+    ctx.font = FRAME_TEXT.name.font;
+    ctx.fillStyle = FRAME_TEXT.name.color;
+    const nameLines = frameWrapText(ctx, name.toUpperCase(), FRAME_TEXT.maxTextWidth);
+    let nameY = FRAME_TEXT.name.yStart;
+    for (const line of nameLines.slice(0, 2)) {
+      ctx.fillText(line, cardCenterX, nameY);
+      nameY += FRAME_TEXT.name.lineHeight;
+    }
+  }
+
+  // Role
+  if (role) {
+    ctx.font = FRAME_TEXT.role.font;
+    ctx.fillStyle = FRAME_TEXT.role.color;
+    ctx.fillText(role.toUpperCase(), cardCenterX, FRAME_TEXT.role.y);
+  }
+}
+
+// ---- Frame Photo Upload ----
+async function handleFramePhotoUpload(file) {
+  try {
+    let workingBlob = file;
+
+    // HEIC conversion using existing mechanism
+    if (await isHeicFile(file)) {
+      const converted = await HeicTo.heicTo({
+        blob: file,
+        type: 'image/jpeg',
+        quality: 0.92,
+      });
+      workingBlob = Array.isArray(converted) ? converted[0] : converted;
+    }
+
+    // Cleanup previous object URL
+    if (frameObjectUrl) {
+      URL.revokeObjectURL(frameObjectUrl);
+    }
+
+    frameObjectUrl = URL.createObjectURL(workingBlob);
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = frameObjectUrl;
+    });
+
+    // Bail if mode changed during async processing
+    if (currentMode !== 'frame') return;
+
+    frameUploadedImage = img;
+
+    // Reset reposition state for new photo
+    framePhotoOffsetX = 0;
+    framePhotoOffsetY = 0;
+    framePhotoScale = 1;
+    frameZoomSlider.value = '1';
+
+    // Ensure template + fonts are loaded
+    const ready = await frameReadyPromise;
+    if (!ready) {
+      showError('Could not load the frame template. Please refresh and try again.');
+      return;
+    }
+
+    // Show preview, controls, and action buttons
+    framePreviewWrap.hidden = false;
+    frameControls.hidden = false;
+    frameActions.hidden = false;
+
+    renderFrameCard();
+  } catch (err) {
+    console.error('Frame photo upload error:', err);
+    showError('Could not process the photo. Try a different file (JPG, PNG, or HEIC).');
+  }
+}
+
+// ---- Mode Toggle ----
+function setMode(mode) {
+  currentMode = mode;
+  modeBtnBuilder.classList.toggle('active', mode === 'builder');
+  modeBtnFrame.classList.toggle('active', mode === 'frame');
+
+  if (mode === 'builder') {
+    builderOnlySection.hidden = false;
+    framePreviewWrap.hidden = true;
+    frameControls.hidden = true;
+    frameActions.hidden = true;
+    photoHint.textContent = "JPG, PNG, or iPhone HEIC. We\u2019ll auto-crop around your face.";
+    // Restore builder preview if a photo was uploaded in builder mode
+    if (uploadBlob) {
+      previewWrap.hidden = false;
+    }
+  } else {
+    // Frame mode
+    builderOnlySection.hidden = true;
+    previewWrap.hidden = true;
+    photoHint.textContent = 'JPG, PNG, or iPhone HEIC. Drag to reposition, scroll to zoom.';
+
+    // Show frame preview (template shown even without photo)
+    framePreviewWrap.hidden = false;
+
+    // Auto-process existing photo if one is selected but not yet composited
+    if (!frameUploadedImage && photoInput.files[0]) {
+      handleFramePhotoUpload(photoInput.files[0]);
+    } else if (frameUploadedImage) {
+      frameControls.hidden = false;
+      frameActions.hidden = false;
+      renderFrameCard();
+    } else {
+      // No photo yet — render template only (white circle placeholder)
+      if (frameTemplateImage) {
+        renderFrameCard();
+      } else {
+        frameReadyPromise.then((ready) => {
+          if (ready && currentMode === 'frame') renderFrameCard();
+        });
+      }
+    }
+  }
+  updateGenerateEnabled();
+}
+
+modeBtnBuilder.addEventListener('click', () => setMode('builder'));
+modeBtnFrame.addEventListener('click', () => setMode('frame'));
+
+// ---- Name/Role live update for frame mode ----
+nameInput.addEventListener('input', () => {
+  if (currentMode === 'frame' && frameTemplateImage) renderFrameCard();
+});
+roleInput.addEventListener('input', () => {
+  if (currentMode === 'frame' && frameTemplateImage) renderFrameCard();
+});
+
+// ---- Frame Reposition: Mouse Drag ----
+frameCanvas.addEventListener('mousedown', (e) => {
+  if (!frameUploadedImage) return;
+  frameDragging = true;
+  frameDragStartX = e.clientX;
+  frameDragStartY = e.clientY;
+  frameOffsetStartX = framePhotoOffsetX;
+  frameOffsetStartY = framePhotoOffsetY;
+  frameCanvas.style.cursor = 'grabbing';
+  e.preventDefault();
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!frameDragging) return;
+  const rect = frameCanvas.getBoundingClientRect();
+  const scaleX = frameCanvas.width / rect.width;
+  const scaleY = frameCanvas.height / rect.height;
+  framePhotoOffsetX = frameOffsetStartX + (e.clientX - frameDragStartX) * scaleX;
+  framePhotoOffsetY = frameOffsetStartY + (e.clientY - frameDragStartY) * scaleY;
+  renderFrameCard();
+});
+
+window.addEventListener('mouseup', () => {
+  if (frameDragging) {
+    frameDragging = false;
+    frameCanvas.style.cursor = 'grab';
+  }
+});
+
+// ---- Frame Reposition: Touch Drag ----
+frameCanvas.addEventListener('touchstart', (e) => {
+  if (!frameUploadedImage || e.touches.length !== 1) return;
+  frameDragging = true;
+  frameDragStartX = e.touches[0].clientX;
+  frameDragStartY = e.touches[0].clientY;
+  frameOffsetStartX = framePhotoOffsetX;
+  frameOffsetStartY = framePhotoOffsetY;
+});
+
+frameCanvas.addEventListener('touchmove', (e) => {
+  if (!frameDragging || e.touches.length !== 1) return;
+  const rect = frameCanvas.getBoundingClientRect();
+  const scaleX = frameCanvas.width / rect.width;
+  const scaleY = frameCanvas.height / rect.height;
+  framePhotoOffsetX = frameOffsetStartX + (e.touches[0].clientX - frameDragStartX) * scaleX;
+  framePhotoOffsetY = frameOffsetStartY + (e.touches[0].clientY - frameDragStartY) * scaleY;
+  renderFrameCard();
+});
+
+frameCanvas.addEventListener('touchend', () => {
+  frameDragging = false;
+});
+
+// ---- Frame Reposition: Scroll to Zoom ----
+frameCanvas.addEventListener('wheel', (e) => {
+  if (!frameUploadedImage) return;
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -0.05 : 0.05;
+  framePhotoScale = Math.max(1, Math.min(3, framePhotoScale + delta));
+  frameZoomSlider.value = String(framePhotoScale);
+  renderFrameCard();
+}, { passive: false });
+
+// ---- Frame Zoom Slider ----
+frameZoomSlider.addEventListener('input', () => {
+  framePhotoScale = parseFloat(frameZoomSlider.value);
+  renderFrameCard();
+});
+
+// ---- Frame Reset Position ----
+frameResetBtn.addEventListener('click', () => {
+  framePhotoOffsetX = 0;
+  framePhotoOffsetY = 0;
+  framePhotoScale = 1;
+  frameZoomSlider.value = '1';
+  renderFrameCard();
+});
+
+// ---- Frame Download (client-side canvas export) ----
+frameDownloadBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!frameUploadedImage || !frameTemplateImage) return;
+
+  // Ensure canvas is up-to-date
+  renderFrameCard();
+
+  frameCanvas.toBlob((blob) => {
+    if (!blob) {
+      console.error('Canvas toBlob returned null');
+      alert('Could not export the card. Please try again.');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'hh-goa-2026-profile-frame.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+});
+
+// ---- Frame Share ----
+frameShareBtn.addEventListener('click', async () => {
+  if (!frameUploadedImage || !frameTemplateImage) return;
+
+  renderFrameCard();
+
+  // Try native share with image file
+  try {
+    const blob = await new Promise((resolve) => frameCanvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Canvas export failed');
+
+    const file = new File([blob], 'hh-goa-2026-profile-frame.png', { type: 'image/png' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        text: SHARE_POST_TEXT,
+      });
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    console.warn('Native share failed, falling back to intent:', err);
+  }
+
+  // Fallback: X/Twitter intent without image
+  const intentUrl = buildShareIntentUrl(window.location.href);
+  window.open(intentUrl, '_blank');
+});
+
+// ---- Frame State Reset (shared helper) ----
+function resetFrameState() {
+  if (frameObjectUrl) {
+    URL.revokeObjectURL(frameObjectUrl);
+    frameObjectUrl = null;
+  }
+  frameUploadedImage = null;
+  framePhotoOffsetX = 0;
+  framePhotoOffsetY = 0;
+  framePhotoScale = 1;
+  frameZoomSlider.value = '1';
+  frameControls.hidden = true;
+  frameActions.hidden = true;
+}
+
+// ---- Frame Start Over ----
+frameStartOverBtn.addEventListener('click', () => {
+  resetFrameState();
+  photoInput.value = '';
+  nameInput.value = '';
+  roleInput.value = '';
+  // Re-render template without photo (white circle placeholder)
+  renderFrameCard();
+});
+
+// Also clean up frame state when Builder ID's Start Over is clicked
+startOverBtn.addEventListener('click', () => {
+  resetFrameState();
+  framePreviewWrap.hidden = true;
+  frameCtx.clearRect(0, 0, frameCanvas.width, frameCanvas.height);
+});
+
